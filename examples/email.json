@@ -1,0 +1,6 @@
+{
+  "action": "draft",
+  "session_id": "lesson-1",
+  "recipient": "student@example.com",
+  "request": "Bienvenidos a nuestra demostración de clase sobre Colombia."
+}

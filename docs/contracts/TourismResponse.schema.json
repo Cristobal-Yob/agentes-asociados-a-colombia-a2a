@@ -1,0 +1,537 @@
+{
+  "$defs": {
+    "Day": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "title": "D\u00eda",
+          "type": "integer"
+        },
+        "activities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Actividades",
+          "type": "array"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Identificadores de las fuentes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day",
+        "activities",
+        "source_ids"
+      ],
+      "title": "D\u00eda del itinerario",
+      "type": "object"
+    },
+    "EmailPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_id": {
+          "title": "Identificador del borrador",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Sesi\u00f3n",
+          "type": "string"
+        },
+        "recipient": {
+          "examples": [
+            "student@example.com"
+          ],
+          "format": "email",
+          "title": "Destinatario",
+          "type": "string"
+        },
+        "subject": {
+          "description": "Asunto exacto incluido en la aprobaci\u00f3n firmada.",
+          "examples": [
+            "Tu itinerario en Colombia"
+          ],
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Asunto",
+          "type": "string"
+        },
+        "text": {
+          "description": "Contenido exacto incluido en la aprobaci\u00f3n firmada.",
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Texto",
+          "type": "string"
+        },
+        "transport": {
+          "enum": [
+            "mock",
+            "resend",
+            "gmail"
+          ],
+          "title": "Transporte del correo",
+          "type": "string"
+        },
+        "sender": {
+          "maxLength": 200,
+          "title": "Remitente",
+          "type": "string"
+        },
+        "expires_at": {
+          "description": "Instante de vencimiento de la aprobaci\u00f3n, en segundos Unix.",
+          "title": "Vencimiento",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "draft_id",
+        "session_id",
+        "recipient",
+        "subject",
+        "text",
+        "transport",
+        "sender",
+        "expires_at"
+      ],
+      "title": "Vista previa del correo",
+      "type": "object"
+    },
+    "EmailResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n.",
+          "enum": [
+            "preview",
+            "simulated",
+            "sent",
+            "delivery_unknown",
+            "error",
+            "clarification",
+            "completed"
+          ],
+          "title": "Estado",
+          "type": "string"
+        },
+        "message": {
+          "title": "Mensaje",
+          "type": "string"
+        },
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmailPreview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vista previa"
+        },
+        "approval_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token de aprobaci\u00f3n"
+        },
+        "delivery": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resultado del env\u00edo"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "C\u00f3digo de error"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contexto opaco para el siguiente mensaje"
+        },
+        "conversation_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "draft",
+                "awaiting_confirmation",
+                "sent",
+                "failed",
+                "completed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estado de la conversaci\u00f3n"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "title": "Respuesta del agente de correo",
+      "type": "object"
+    },
+    "Itinerary": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "title": "Ciudad",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "$ref": "#/$defs/Day"
+          },
+          "title": "D\u00edas y actividades",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 3000,
+          "title": "Resumen",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/Source"
+          },
+          "title": "Fuentes",
+          "type": "array"
+        },
+        "warnings": {
+          "description": "L\u00edmites de las sugerencias.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Advertencias",
+          "type": "array"
+        },
+        "model_mode": {
+          "description": "Modo de ejecuci\u00f3n utilizado.",
+          "title": "Modo del modelo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "city",
+        "days",
+        "summary",
+        "sources",
+        "warnings",
+        "model_mode"
+      ],
+      "title": "Itinerario",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Identificador original de la fuente.",
+          "title": "Identificador",
+          "type": "string"
+        },
+        "name": {
+          "description": "Nombre de la actividad en el cat\u00e1logo de origen.",
+          "title": "Nombre",
+          "type": "string"
+        },
+        "city": {
+          "title": "Ciudad",
+          "type": "string"
+        },
+        "url": {
+          "description": "Enlace de referencia de la fuente.",
+          "title": "Enlace",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fecha de consulta en vivo; nula para datos de ejemplo.",
+          "title": "Fecha de consulta"
+        },
+        "fixture_as_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fecha de los datos de ejemplo"
+        },
+        "source_reviewed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fecha de revisi\u00f3n de la fuente"
+        },
+        "provenance": {
+          "description": "Datos de ejemplo revisados o registros de MCP en vivo.",
+          "enum": [
+            "curated_fixture",
+            "live_mcp"
+          ],
+          "title": "Procedencia",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "city",
+        "url",
+        "retrieved_at",
+        "provenance"
+      ],
+      "title": "Fuente",
+      "type": "object"
+    },
+    "TripContext": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ciudad que se desea visitar.",
+          "examples": [
+            "Bogot\u00e1"
+          ],
+          "title": "Ciudad"
+        },
+        "days": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duraci\u00f3n de la visita, de 1 a 7 d\u00edas.",
+          "examples": [
+            2
+          ],
+          "title": "D\u00edas"
+        },
+        "interests": {
+          "description": "Intereses del viaje. Los valores del contrato conservan sus nombres originales.",
+          "examples": [
+            [
+              "culture",
+              "nature"
+            ]
+          ],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Intereses",
+          "type": "array"
+        },
+        "draft_email": {
+          "default": false,
+          "description": "Conserva la solicitud expl\u00edcita de correo durante las aclaraciones. Nunca autoriza el env\u00edo y se desactiva al obtener la vista previa.",
+          "title": "Solicitud de borrador pendiente",
+          "type": "boolean"
+        },
+        "recipient": {
+          "anyOf": [
+            {
+              "format": "email",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Destinatario expl\u00edcito conservado entre turnos; no se infiere de fuentes.",
+          "examples": [
+            "persona@example.com"
+          ],
+          "title": "Destinatario indicado"
+        },
+        "email_context": {
+          "anyOf": [
+            {
+              "maxLength": 24000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Contexto opaco del agente de correo. Devuelva context sin interpretarlo.",
+          "title": "Continuaci\u00f3n del correo"
+        }
+      },
+      "title": "Contexto del viaje",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "completed",
+        "partial",
+        "clarification",
+        "error"
+      ],
+      "title": "Estado",
+      "type": "string"
+    },
+    "message": {
+      "title": "Mensaje",
+      "type": "string"
+    },
+    "context": {
+      "$ref": "#/$defs/TripContext"
+    },
+    "missing_field": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Campo pendiente"
+    },
+    "itinerary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Itinerary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Itinerario"
+    },
+    "email": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailResponse"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Respuesta del agente de correo"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "C\u00f3digo de error"
+    },
+    "retrieval": {
+      "default": "not_requested",
+      "title": "Estado de consulta de fuentes",
+      "type": "string"
+    },
+    "conversation_state": {
+      "anyOf": [
+        {
+          "enum": [
+            "draft",
+            "awaiting_confirmation",
+            "sent",
+            "failed",
+            "completed"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estado de la conversaci\u00f3n"
+    }
+  },
+  "required": [
+    "status",
+    "message",
+    "context"
+  ],
+  "title": "Respuesta del agente de itinerarios",
+  "type": "object"
+}

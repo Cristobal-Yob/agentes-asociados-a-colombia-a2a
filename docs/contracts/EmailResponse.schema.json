@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "EmailPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_id": {
+          "title": "Identificador del borrador",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Sesi\u00f3n",
+          "type": "string"
+        },
+        "recipient": {
+          "examples": [
+            "student@example.com"
+          ],
+          "format": "email",
+          "title": "Destinatario",
+          "type": "string"
+        },
+        "subject": {
+          "description": "Asunto exacto incluido en la aprobaci\u00f3n firmada.",
+          "examples": [
+            "Tu itinerario en Colombia"
+          ],
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Asunto",
+          "type": "string"
+        },
+        "text": {
+          "description": "Contenido exacto incluido en la aprobaci\u00f3n firmada.",
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Texto",
+          "type": "string"
+        },
+        "transport": {
+          "enum": [
+            "mock",
+            "resend",
+            "gmail"
+          ],
+          "title": "Transporte del correo",
+          "type": "string"
+        },
+        "sender": {
+          "maxLength": 200,
+          "title": "Remitente",
+          "type": "string"
+        },
+        "expires_at": {
+          "description": "Instante de vencimiento de la aprobaci\u00f3n, en segundos Unix.",
+          "title": "Vencimiento",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "draft_id",
+        "session_id",
+        "recipient",
+        "subject",
+        "text",
+        "transport",
+        "sender",
+        "expires_at"
+      ],
+      "title": "Vista previa del correo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n.",
+      "enum": [
+        "preview",
+        "simulated",
+        "sent",
+        "delivery_unknown",
+        "error",
+        "clarification",
+        "completed"
+      ],
+      "title": "Estado",
+      "type": "string"
+    },
+    "message": {
+      "title": "Mensaje",
+      "type": "string"
+    },
+    "preview": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailPreview"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Vista previa"
+    },
+    "approval_token": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Token de aprobaci\u00f3n"
+    },
+    "delivery": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resultado del env\u00edo"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "C\u00f3digo de error"
+    },
+    "context": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Contexto opaco para el siguiente mensaje"
+    },
+    "conversation_state": {
+      "anyOf": [
+        {
+          "enum": [
+            "draft",
+            "awaiting_confirmation",
+            "sent",
+            "failed",
+            "completed"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estado de la conversaci\u00f3n"
+    }
+  },
+  "required": [
+    "status",
+    "message"
+  ],
+  "title": "Respuesta del agente de correo",
+  "type": "object"
+}

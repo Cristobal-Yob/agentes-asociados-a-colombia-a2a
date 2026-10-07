@@ -1,0 +1,356 @@
+{
+  "$defs": {
+    "Day": {
+      "additionalProperties": false,
+      "properties": {
+        "day": {
+          "title": "D\u00eda",
+          "type": "integer"
+        },
+        "activities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Actividades",
+          "type": "array"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Identificadores de las fuentes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day",
+        "activities",
+        "source_ids"
+      ],
+      "title": "D\u00eda del itinerario",
+      "type": "object"
+    },
+    "EmailPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_id": {
+          "title": "Identificador del borrador",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Sesi\u00f3n",
+          "type": "string"
+        },
+        "recipient": {
+          "examples": [
+            "student@example.com"
+          ],
+          "format": "email",
+          "title": "Destinatario",
+          "type": "string"
+        },
+        "subject": {
+          "description": "Asunto exacto incluido en la aprobaci\u00f3n firmada.",
+          "examples": [
+            "Tu itinerario en Colombia"
+          ],
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Asunto",
+          "type": "string"
+        },
+        "text": {
+          "description": "Contenido exacto incluido en la aprobaci\u00f3n firmada.",
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Texto",
+          "type": "string"
+        },
+        "transport": {
+          "enum": [
+            "mock",
+            "resend",
+            "gmail"
+          ],
+          "title": "Transporte del correo",
+          "type": "string"
+        },
+        "sender": {
+          "maxLength": 200,
+          "title": "Remitente",
+          "type": "string"
+        },
+        "expires_at": {
+          "description": "Instante de vencimiento de la aprobaci\u00f3n, en segundos Unix.",
+          "title": "Vencimiento",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "draft_id",
+        "session_id",
+        "recipient",
+        "subject",
+        "text",
+        "transport",
+        "sender",
+        "expires_at"
+      ],
+      "title": "Vista previa del correo",
+      "type": "object"
+    },
+    "Itinerary": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "title": "Ciudad",
+          "type": "string"
+        },
+        "days": {
+          "items": {
+            "$ref": "#/$defs/Day"
+          },
+          "title": "D\u00edas y actividades",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 3000,
+          "title": "Resumen",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/Source"
+          },
+          "title": "Fuentes",
+          "type": "array"
+        },
+        "warnings": {
+          "description": "L\u00edmites de las sugerencias.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Advertencias",
+          "type": "array"
+        },
+        "model_mode": {
+          "description": "Modo de ejecuci\u00f3n utilizado.",
+          "title": "Modo del modelo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "city",
+        "days",
+        "summary",
+        "sources",
+        "warnings",
+        "model_mode"
+      ],
+      "title": "Itinerario",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Identificador original de la fuente.",
+          "title": "Identificador",
+          "type": "string"
+        },
+        "name": {
+          "description": "Nombre de la actividad en el cat\u00e1logo de origen.",
+          "title": "Nombre",
+          "type": "string"
+        },
+        "city": {
+          "title": "Ciudad",
+          "type": "string"
+        },
+        "url": {
+          "description": "Enlace de referencia de la fuente.",
+          "title": "Enlace",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fecha de consulta en vivo; nula para datos de ejemplo.",
+          "title": "Fecha de consulta"
+        },
+        "fixture_as_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fecha de los datos de ejemplo"
+        },
+        "source_reviewed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fecha de revisi\u00f3n de la fuente"
+        },
+        "provenance": {
+          "description": "Datos de ejemplo revisados o registros de MCP en vivo.",
+          "enum": [
+            "curated_fixture",
+            "live_mcp"
+          ],
+          "title": "Procedencia",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "city",
+        "url",
+        "retrieved_at",
+        "provenance"
+      ],
+      "title": "Fuente",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "default": "draft",
+      "description": "draft prepara una vista previa; send solicita su env\u00edo.",
+      "enum": [
+        "draft",
+        "send"
+      ],
+      "title": "Acci\u00f3n",
+      "type": "string"
+    },
+    "session_id": {
+      "default": "classroom",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Sesi\u00f3n",
+      "type": "string"
+    },
+    "recipient": {
+      "anyOf": [
+        {
+          "format": "email",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "examples": [
+        "student@example.com"
+      ],
+      "title": "Destinatario"
+    },
+    "request": {
+      "default": "",
+      "description": "Contenido solicitado para el borrador.",
+      "examples": [
+        "Redacta un recordatorio de la reuni\u00f3n de trabajo del lunes."
+      ],
+      "maxLength": 4000,
+      "title": "Solicitud",
+      "type": "string"
+    },
+    "itinerary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Itinerary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Itinerario"
+    },
+    "preview": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailPreview"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Vista previa firmada, sin modificar, para enviar.",
+      "title": "Vista previa"
+    },
+    "approval_token": {
+      "anyOf": [
+        {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Token firmado devuelto junto con esta vista previa. No lo modifique.",
+      "title": "Token de aprobaci\u00f3n"
+    },
+    "confirmed": {
+      "default": false,
+      "description": "Debe ser true para enviar la vista previa exacta antes de su vencimiento. Preparar un borrador no autoriza el env\u00edo.",
+      "title": "Confirmaci\u00f3n expl\u00edcita",
+      "type": "boolean"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Entrada conversacional opcional para A2A; conserva el contrato estructurado.",
+      "title": "Mensaje conversacional"
+    },
+    "context": {
+      "anyOf": [
+        {
+          "maxLength": 24000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Contexto opaco de conversaci\u00f3n"
+    }
+  },
+  "title": "Solicitud de correo",
+  "type": "object"
+}

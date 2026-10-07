@@ -1,0 +1,1 @@
+"""Independent tourism agent."""
