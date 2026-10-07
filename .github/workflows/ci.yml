@@ -19,8 +19,16 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       PYTHONDONTWRITEBYTECODE: '1'
-      COLOMBIA_WORK_DIR: ${{ runner.temp }}/colombia-runtime
     steps:
+      - name: Preparar directorio temporal de ejecución
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+
+          work_dir = Path(os.environ["RUNNER_TEMP"]) / "colombia-runtime"
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as environment:
+              environment.write(f"COLOMBIA_WORK_DIR={work_dir}\n")
       - name: Obtener el código
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
