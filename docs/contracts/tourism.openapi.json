@@ -1,0 +1,1245 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agente de itinerarios en Colombia",
+    "description": "Prepara sugerencias basadas en fuentes del cat\u00e1logo y puede solicitar un borrador al agente de correo mediante A2A. Tras revisar la vista previa, puede delegar su confirmaci\u00f3n expl\u00edcita al agente de correo. Los ejemplos no reservan actividades ni verifican precios, horarios o condiciones de seguridad.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Estado"
+        ],
+        "summary": "Consultar el estado del agente",
+        "description": "Comprueba que la API responde. No consulta modelos ni proveedores externos.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Estado del agente",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "Itinerarios"
+        ],
+        "summary": "Consultar o completar un itinerario",
+        "description": "Indique ciudad, duraci\u00f3n e intereses. Si falta informaci\u00f3n, el agente solicita un dato por vez. Puede pedir correo en el propio message con destinatario expl\u00edcito. Devuelva context intacto en el turno siguiente; despu\u00e9s de revisar la vista previa responda \u00abS\u00ed, env\u00edalo\u00bb. draft_email sigue siendo compatible. Una orden expl\u00edcita completa de env\u00edo permite delegar su ejecuci\u00f3n en ese turno; pedir solo un borrador conserva la confirmaci\u00f3n posterior.",
+        "operationId": "chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TourismRequest"
+              },
+              "examples": {
+                "primera_solicitud": {
+                  "summary": "Primer mensaje, sin contexto previo",
+                  "value": {
+                    "message": "Bogot\u00e1, 2 d\u00edas, cultura; prepara el itinerario por correo para persona@example.com."
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Itinerario, solicitud de aclaraci\u00f3n o error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TourismResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/agent-card.json": {
+      "get": {
+        "tags": [
+          "A2A: Agent Card"
+        ],
+        "summary": " Get Agent Card",
+        "description": "Returns the public AgentCard describing this agent's capabilities, supported transports, and skills.",
+        "operationId": "_get_agent_card__well_known_agent_card_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/a2a": {
+      "post": {
+        "tags": [
+          "A2A: JSON-RPC"
+        ],
+        "summary": "A2A JSON-RPC endpoint",
+        "description": "A2A JSON-RPC 2.0 endpoint. The `method` field selects the operation;\n`params` must match that method's schema (see the `oneOf` below).\n\n**Supported methods:**\n\n- `SendMessage` \u2014 Send a message to the agent (returns a Task or response Message).\n- `SendStreamingMessage` \u2014 Send a message and receive a Server-Sent Events stream.\n- `GetTask` \u2014 Fetch a task by ID.\n- `ListTasks` \u2014 List tasks with pagination and filtering.\n- `CancelTask` \u2014 Cancel an in-progress task.\n- `CreateTaskPushNotificationConfig` \u2014 Register a push-notification config on a task.\n- `GetTaskPushNotificationConfig` \u2014 Read a single push-notification config.\n- `ListTaskPushNotificationConfigs` \u2014 List all push-notification configs for a task.\n- `DeleteTaskPushNotificationConfig` \u2014 Delete a push-notification config.\n- `SubscribeToTask` \u2014 Subscribe to task events via Server-Sent Events.\n- `GetExtendedAgentCard` \u2014 Fetch the authenticated extended agent card.\n",
+        "operationId": "handle_requests_a2a_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "description": "A2A JSON-RPC 2.0 request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/A2ARequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "A2A-Version",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1.0"
+              ]
+            },
+            "example": "1.0"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Day": {
+        "properties": {
+          "day": {
+            "type": "integer",
+            "title": "D\u00eda"
+          },
+          "activities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Actividades"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Identificadores de las fuentes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "day",
+          "activities",
+          "source_ids"
+        ],
+        "title": "D\u00eda del itinerario"
+      },
+      "EmailPreview": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "title": "Identificador del borrador"
+          },
+          "session_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Sesi\u00f3n"
+          },
+          "recipient": {
+            "type": "string",
+            "format": "email",
+            "title": "Destinatario",
+            "examples": [
+              "student@example.com"
+            ]
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]+$",
+            "title": "Asunto",
+            "description": "Asunto exacto incluido en la aprobaci\u00f3n firmada.",
+            "examples": [
+              "Tu itinerario en Colombia"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Texto",
+            "description": "Contenido exacto incluido en la aprobaci\u00f3n firmada."
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "mock",
+              "resend",
+              "gmail"
+            ],
+            "title": "Transporte del correo"
+          },
+          "sender": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Remitente"
+          },
+          "expires_at": {
+            "type": "integer",
+            "title": "Vencimiento",
+            "description": "Instante de vencimiento de la aprobaci\u00f3n, en segundos Unix."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_id",
+          "session_id",
+          "recipient",
+          "subject",
+          "text",
+          "transport",
+          "sender",
+          "expires_at"
+        ],
+        "title": "Vista previa del correo"
+      },
+      "EmailResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "preview",
+              "simulated",
+              "sent",
+              "delivery_unknown",
+              "error",
+              "clarification",
+              "completed"
+            ],
+            "title": "Estado",
+            "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n."
+          },
+          "message": {
+            "type": "string",
+            "title": "Mensaje"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailPreview"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vista previa"
+          },
+          "approval_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token de aprobaci\u00f3n"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resultado del env\u00edo"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C\u00f3digo de error"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto opaco para el siguiente mensaje"
+          },
+          "conversation_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "awaiting_confirmation",
+                  "sent",
+                  "failed",
+                  "completed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado de la conversaci\u00f3n"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "Respuesta del agente de correo"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Itinerary": {
+        "properties": {
+          "city": {
+            "type": "string",
+            "title": "Ciudad"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/Day"
+            },
+            "type": "array",
+            "title": "D\u00edas y actividades"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Resumen"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            },
+            "type": "array",
+            "title": "Fuentes"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Advertencias",
+            "description": "L\u00edmites de las sugerencias."
+          },
+          "model_mode": {
+            "type": "string",
+            "title": "Modo del modelo",
+            "description": "Modo de ejecuci\u00f3n utilizado."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "city",
+          "days",
+          "summary",
+          "sources",
+          "warnings",
+          "model_mode"
+        ],
+        "title": "Itinerario"
+      },
+      "Source": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Identificador",
+            "description": "Identificador original de la fuente."
+          },
+          "name": {
+            "type": "string",
+            "title": "Nombre",
+            "description": "Nombre de la actividad en el cat\u00e1logo de origen."
+          },
+          "city": {
+            "type": "string",
+            "title": "Ciudad"
+          },
+          "url": {
+            "type": "string",
+            "title": "Enlace",
+            "description": "Enlace de referencia de la fuente."
+          },
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha de consulta",
+            "description": "Fecha de consulta en vivo; nula para datos de ejemplo."
+          },
+          "fixture_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha de los datos de ejemplo"
+          },
+          "source_reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha de revisi\u00f3n de la fuente"
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "curated_fixture",
+              "live_mcp"
+            ],
+            "title": "Procedencia",
+            "description": "Datos de ejemplo revisados o registros de MCP en vivo."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "city",
+          "url",
+          "retrieved_at",
+          "provenance"
+        ],
+        "title": "Fuente"
+      },
+      "TourismRequest": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Mensaje",
+            "description": "Preferencias para la visita y solicitud opcional de correo. Una orden expl\u00edcita de env\u00edo permite delegarlo en el mismo turno; un borrador conserva su confirmaci\u00f3n.",
+            "default": "",
+            "examples": [
+              "Bogot\u00e1, 2 d\u00edas, cultura; prep\u00e1ralo por correo para persona@example.com"
+            ]
+          },
+          "context": {
+            "$ref": "#/components/schemas/TripContext"
+          },
+          "draft_email": {
+            "type": "boolean",
+            "title": "Preparar correo",
+            "description": "Solicita una vista previa al agente de correo mediante A2A. No env\u00eda mensajes.",
+            "default": false
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destinatario",
+            "examples": [
+              "student@example.com"
+            ]
+          },
+          "session_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Sesi\u00f3n",
+            "default": "classroom"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Solicitud de itinerario"
+      },
+      "TourismResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "partial",
+              "clarification",
+              "error"
+            ],
+            "title": "Estado"
+          },
+          "message": {
+            "type": "string",
+            "title": "Mensaje"
+          },
+          "context": {
+            "$ref": "#/components/schemas/TripContext"
+          },
+          "missing_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campo pendiente"
+          },
+          "itinerary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Itinerary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Itinerario"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respuesta del agente de correo"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C\u00f3digo de error"
+          },
+          "retrieval": {
+            "type": "string",
+            "title": "Estado de consulta de fuentes",
+            "default": "not_requested"
+          },
+          "conversation_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "awaiting_confirmation",
+                  "sent",
+                  "failed",
+                  "completed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado de la conversaci\u00f3n"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "context"
+        ],
+        "title": "Respuesta del agente de itinerarios"
+      },
+      "TripContext": {
+        "properties": {
+          "city": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ciudad",
+            "description": "Ciudad que se desea visitar.",
+            "examples": [
+              "Bogot\u00e1"
+            ]
+          },
+          "days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "D\u00edas",
+            "description": "Duraci\u00f3n de la visita, de 1 a 7 d\u00edas.",
+            "examples": [
+              2
+            ]
+          },
+          "interests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Intereses",
+            "description": "Intereses del viaje. Los valores del contrato conservan sus nombres originales.",
+            "examples": [
+              [
+                "culture",
+                "nature"
+              ]
+            ]
+          },
+          "draft_email": {
+            "type": "boolean",
+            "title": "Solicitud de borrador pendiente",
+            "description": "Conserva la solicitud expl\u00edcita de correo durante las aclaraciones. Nunca autoriza el env\u00edo y se desactiva al obtener la vista previa.",
+            "default": false
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destinatario indicado",
+            "description": "Destinatario expl\u00edcito conservado entre turnos; no se infiere de fuentes.",
+            "examples": [
+              "persona@example.com"
+            ]
+          },
+          "email_context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continuaci\u00f3n del correo",
+            "description": "Contexto opaco del agente de correo. Devuelva context sin interpretarlo."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Contexto del viaje"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "configuration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SendMessageConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": null
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "example": "message_id"
+          },
+          "context_id": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": ""
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ROLE_UNSPECIFIED",
+              "ROLE_USER",
+              "ROLE_AGENT"
+            ],
+            "example": "ROLE_USER"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            },
+            "example": [
+              {
+                "text": ""
+              }
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": ""
+            },
+            "example": [
+              ""
+            ]
+          },
+          "reference_task_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": ""
+            },
+            "example": [
+              ""
+            ]
+          }
+        }
+      },
+      "Part": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "filename": {
+                "type": "string",
+                "example": ""
+              },
+              "media_type": {
+                "type": "string",
+                "example": ""
+              }
+            }
+          },
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "raw": {
+                    "type": "string",
+                    "format": "byte"
+                  }
+                },
+                "required": [
+                  "raw"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {}
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            ]
+          }
+        ],
+        "example": {
+          "text": ""
+        }
+      },
+      "SendMessageConfiguration": {
+        "type": "object",
+        "properties": {
+          "accepted_output_modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": ""
+            },
+            "example": [
+              ""
+            ]
+          },
+          "task_push_notification_config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskPushNotificationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": null
+          },
+          "history_length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "return_immediately": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "TaskPushNotificationConfig": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": ""
+          },
+          "url": {
+            "type": "string",
+            "example": "url"
+          },
+          "token": {
+            "type": "string",
+            "example": ""
+          },
+          "authentication": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AuthenticationInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": null
+          }
+        }
+      },
+      "AuthenticationInfo": {
+        "type": "object",
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "example": "scheme"
+          },
+          "credentials": {
+            "type": "string",
+            "example": ""
+          }
+        }
+      },
+      "GetTaskRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          },
+          "history_length": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ListTasksRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "context_id": {
+            "type": "string",
+            "example": ""
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "TASK_STATE_UNSPECIFIED",
+              "TASK_STATE_SUBMITTED",
+              "TASK_STATE_WORKING",
+              "TASK_STATE_COMPLETED",
+              "TASK_STATE_FAILED",
+              "TASK_STATE_CANCELED",
+              "TASK_STATE_INPUT_REQUIRED",
+              "TASK_STATE_REJECTED",
+              "TASK_STATE_AUTH_REQUIRED"
+            ],
+            "example": "TASK_STATE_SUBMITTED"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_token": {
+            "type": "string",
+            "example": ""
+          },
+          "history_length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status_timestamp_after": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "include_artifacts": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CancelTaskRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "GetTaskPushNotificationConfigRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": "task_id"
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          }
+        }
+      },
+      "ListTaskPushNotificationConfigsRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": "task_id"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_token": {
+            "type": "string",
+            "example": ""
+          }
+        }
+      },
+      "DeleteTaskPushNotificationConfigRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": "task_id"
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          }
+        }
+      },
+      "SubscribeToTaskRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          }
+        }
+      },
+      "GetExtendedAgentCardRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          }
+        }
+      },
+      "A2ARequest": {
+        "type": "object",
+        "required": [
+          "jsonrpc",
+          "method"
+        ],
+        "properties": {
+          "jsonrpc": {
+            "type": "string",
+            "enum": [
+              "2.0"
+            ]
+          },
+          "id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "SendMessage",
+              "SendStreamingMessage",
+              "GetTask",
+              "ListTasks",
+              "CancelTask",
+              "CreateTaskPushNotificationConfig",
+              "GetTaskPushNotificationConfig",
+              "ListTaskPushNotificationConfigs",
+              "DeleteTaskPushNotificationConfig",
+              "SubscribeToTask",
+              "GetExtendedAgentCard"
+            ]
+          },
+          "params": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              },
+              {
+                "$ref": "#/components/schemas/GetTaskRequest"
+              },
+              {
+                "$ref": "#/components/schemas/ListTasksRequest"
+              },
+              {
+                "$ref": "#/components/schemas/CancelTaskRequest"
+              },
+              {
+                "$ref": "#/components/schemas/TaskPushNotificationConfig"
+              },
+              {
+                "$ref": "#/components/schemas/GetTaskPushNotificationConfigRequest"
+              },
+              {
+                "$ref": "#/components/schemas/ListTaskPushNotificationConfigsRequest"
+              },
+              {
+                "$ref": "#/components/schemas/DeleteTaskPushNotificationConfigRequest"
+              },
+              {
+                "$ref": "#/components/schemas/SubscribeToTaskRequest"
+              },
+              {
+                "$ref": "#/components/schemas/GetExtendedAgentCardRequest"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

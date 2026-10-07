@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "TripContext": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ciudad que se desea visitar.",
+          "examples": [
+            "Bogot\u00e1"
+          ],
+          "title": "Ciudad"
+        },
+        "days": {
+          "anyOf": [
+            {
+              "maximum": 7,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duraci\u00f3n de la visita, de 1 a 7 d\u00edas.",
+          "examples": [
+            2
+          ],
+          "title": "D\u00edas"
+        },
+        "interests": {
+          "description": "Intereses del viaje. Los valores del contrato conservan sus nombres originales.",
+          "examples": [
+            [
+              "culture",
+              "nature"
+            ]
+          ],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Intereses",
+          "type": "array"
+        },
+        "draft_email": {
+          "default": false,
+          "description": "Conserva la solicitud expl\u00edcita de correo durante las aclaraciones. Nunca autoriza el env\u00edo y se desactiva al obtener la vista previa.",
+          "title": "Solicitud de borrador pendiente",
+          "type": "boolean"
+        },
+        "recipient": {
+          "anyOf": [
+            {
+              "format": "email",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Destinatario expl\u00edcito conservado entre turnos; no se infiere de fuentes.",
+          "examples": [
+            "persona@example.com"
+          ],
+          "title": "Destinatario indicado"
+        },
+        "email_context": {
+          "anyOf": [
+            {
+              "maxLength": 24000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Contexto opaco del agente de correo. Devuelva context sin interpretarlo.",
+          "title": "Continuaci\u00f3n del correo"
+        }
+      },
+      "title": "Contexto del viaje",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "default": "",
+      "description": "Preferencias para la visita y solicitud opcional de correo. Una orden expl\u00edcita de env\u00edo permite delegarlo en el mismo turno; un borrador conserva su confirmaci\u00f3n.",
+      "examples": [
+        "Bogot\u00e1, 2 d\u00edas, cultura; prep\u00e1ralo por correo para persona@example.com"
+      ],
+      "maxLength": 4000,
+      "title": "Mensaje",
+      "type": "string"
+    },
+    "context": {
+      "$ref": "#/$defs/TripContext"
+    },
+    "draft_email": {
+      "default": false,
+      "description": "Solicita una vista previa al agente de correo mediante A2A. No env\u00eda mensajes.",
+      "title": "Preparar correo",
+      "type": "boolean"
+    },
+    "recipient": {
+      "anyOf": [
+        {
+          "format": "email",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "examples": [
+        "student@example.com"
+      ],
+      "title": "Destinatario"
+    },
+    "session_id": {
+      "default": "classroom",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Sesi\u00f3n",
+      "type": "string"
+    }
+  },
+  "title": "Solicitud de itinerario",
+  "type": "object"
+}

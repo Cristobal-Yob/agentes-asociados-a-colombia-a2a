@@ -1,0 +1,63 @@
+name: Preparar revisiones Cloud Run sin tráfico
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudrun-two-agents
+  cancel-in-progress: false
+
+env:
+  EXPECTED_GITHUB_REPOSITORY: ${{ vars.EXPECTED_GITHUB_REPOSITORY }}
+  GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validar identidad y destino antes de autenticar
+        run: python -B -m scripts.release_cloud_run validate-inputs
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  revisions:
+    needs: [validate, checks]
+    runs-on: ubuntu-latest
+    environment: cloudrun-two-agents
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Obtener el código verificado
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validar nuevamente las variables del entorno protegido
+        run: python -B -m scripts.release_cloud_run validate-inputs
+      - name: Autenticar mediante WIF sin claves persistidas
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: example-project
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Preparar gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Comprobar prerrequisitos, construir y crear revisiones por digest
+        env:
+          RELEASE_STAGE: ${{ runner.temp }}/two-agents-runtime
+        run: python -B -m scripts.release_cloud_run release --stage "$RELEASE_STAGE"

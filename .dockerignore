@@ -1,0 +1,12 @@
+# Contexto permitido: solo dependencias bloqueadas y código runtime.
+**
+!pyproject.toml
+!uv.lock
+!common/
+!common/*.py
+!email_agent/
+!email_agent/*.py
+!email_agent/Dockerfile
+!tourism_agent/
+!tourism_agent/*.py
+!tourism_agent/Dockerfile

@@ -1,0 +1,35 @@
+services:
+  tourism:
+    build:
+      context: .
+      dockerfile: tourism_agent/Dockerfile
+    ports: ["127.0.0.1:8001:8080"]
+    environment:
+      PUBLIC_AGENT_URL: http://127.0.0.1:8001
+      EMAIL_AGENT_URL: http://email:8080
+      MODEL_MODE: vertex
+      VERTEX_PROJECT_ID: example-project
+      VERTEX_LOCATION: global
+      MODEL_ID: gemini-3.1-flash-lite
+      ENABLE_MCP: "false"
+  email:
+    build:
+      context: .
+      dockerfile: email_agent/Dockerfile
+    ports: ["127.0.0.1:8002:8080"]
+    environment:
+      PUBLIC_AGENT_URL: http://email:8080
+      MODEL_MODE: vertex
+      VERTEX_PROJECT_ID: example-project
+      VERTEX_LOCATION: global
+      MODEL_ID: gemini-3.1-flash-lite
+      EMAIL_TRANSPORT: gmail
+      EMAIL_SENDER: learner@example.com
+      GMAIL_CREDENTIALS_FILE: /secrets/gmail/authorized-user.json
+      GMAIL_LEDGER: sqlite
+      GMAIL_LEDGER_PATH: /state/gmail-dispatch.sqlite
+      APPROVAL_SIGNING_KEY: ${APPROVAL_SIGNING_KEY:-}
+      ENABLE_REAL_EMAIL: "true"
+    volumes:
+      - ${GMAIL_CREDENTIALS_FILE:-../../work/gmail-authorized-user.json}:/secrets/gmail/authorized-user.json:ro
+      - ../../work/gmail-runtime:/state
