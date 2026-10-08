@@ -25,6 +25,7 @@ from email_agent.transport import MailTransport
 
 class MailState(TypedDict, total=False):
     request: object
+    chat_message: str
     response: EmailResponse
     route: str
     authorized_preview: EmailPreview
@@ -77,15 +78,21 @@ class EmailService:
             )
         ).hexdigest()
         graph = StateGraph(MailState)
-        for name in ["validate", "clarify", "draft", "authorize", "send"]:
+        for name in ["validate", "clarify", "respond_to_chat", "draft", "authorize", "send"]:
             graph.add_node(name, getattr(self, name))
         graph.add_edge(START, "validate")
         graph.add_conditional_edges(
             "validate",
             lambda s: s["route"],
-            {"clarify": "clarify", "draft": "draft", "authorize": "authorize"},
+            {
+                "clarify": "clarify",
+                "respond_to_chat": "respond_to_chat",
+                "draft": "draft",
+                "authorize": "authorize",
+            },
         )
         graph.add_edge("clarify", END)
+        graph.add_edge("respond_to_chat", END)
         graph.add_edge("draft", END)
         graph.add_conditional_edges("authorize", lambda s: "send" if s["route"] == "send" else END)
         graph.add_edge("send", END)
@@ -293,15 +300,23 @@ class EmailService:
 
     async def converse(self, message):
         try:
-            result = await self.model.invoke({"operation": "chat", "request": message})
-            reply = result["message"]
-            if not isinstance(reply, str) or not reply.strip() or len(reply) > 4000:
-                raise ValueError("invalid_chat_output")
+            return (await self.runtime.run(self.graph, {"chat_message": message}))["response"]
+        except CapacityExceeded:
             return EmailResponse(
-                status="completed",
-                message=reply,
+                status="error",
+                message="La capacidad de solicitudes está agotada; no se intentó ningún envío.",
                 delivery="not_attempted",
-                conversation_state="completed",
+                error_code="capacity_exceeded",
+                conversation_state="failed",
+            )
+        except TimeoutError:
+            return EmailResponse(
+                status="error",
+                message="La solicitud superó el tiempo máximo disponible. "
+                "No se intentó ningún envío.",
+                delivery="not_attempted",
+                error_code="deadline_or_capacity",
+                conversation_state="failed",
             )
         except Exception:
             return EmailResponse(
@@ -361,6 +376,8 @@ class EmailService:
         )
 
     async def validate(self, state):
+        if "chat_message" in state:
+            return {"route": "respond_to_chat"}
         request = state["request"]
         if request.action == "send":
             return {"route": "authorize"}
@@ -382,6 +399,20 @@ class EmailService:
 
     async def clarify(self, state):
         return {}
+
+    async def respond_to_chat(self, state):
+        result = await self.model.invoke({"operation": "chat", "request": state["chat_message"]})
+        reply = result["message"]
+        if not isinstance(reply, str) or not reply.strip() or len(reply) > 4000:
+            raise ValueError("invalid_chat_output")
+        return {
+            "response": EmailResponse(
+                status="completed",
+                message=reply,
+                delivery="not_attempted",
+                conversation_state="completed",
+            )
+        }
 
     async def draft(self, state):
         request = state["request"]

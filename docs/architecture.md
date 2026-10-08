@@ -45,6 +45,31 @@ La instrucción del modelo exige español neutro profesional para contenido huma
 
 ## Grafo de correo
 
+La conversación general usa el mismo `StateGraph(MailState)` y el mismo límite de
+ocho ejecuciones que la redacción y autorización. `converse()` ingresa al grafo;
+`validate` selecciona `respond_to_chat`, que llama a LangChain, valida el texto y
+termina sin acceder al transporte. Una cancelación libera el cupo compartido.
+El plazo máximo sigue siendo 35 segundos y la recursión máxima, 12 pasos.
+
+```mermaid
+flowchart LR
+  START --> validate
+  validate -->|Conversación general| respond_to_chat
+  respond_to_chat --> END
+  validate -->|Faltan datos| clarify
+  clarify --> END
+  validate -->|Borrador| draft
+  draft --> END
+  validate -->|Envío| authorize
+  authorize -->|Aprobación válida| send
+  authorize -->|Rechazo| END
+  send --> END
+```
+
+Todas las llamadas al modelo de correo quedan dentro de `respond_to_chat` o
+`draft`. Este cambio no añade respaldo de modelo o proveedor ni reintentos de
+envío; la autorización firmada y el registro durable conservan sus controles.
+
 ```mermaid
 flowchart TD
   A[EmailRequest validado] --> B{Redactar o enviar?}
