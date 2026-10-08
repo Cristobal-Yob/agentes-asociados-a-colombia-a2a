@@ -58,17 +58,47 @@ def test_non_exact_or_dirty_source_never_reaches_docker(head, status, sha):
     assert not any(command[0] == "docker" for command in calls)
 
 
-def test_safe_argv_and_bounded_failure_hide_child_output():
+def test_dependency_check_has_bounded_ephemeral_writable_cache():
+    for name in images.IMAGES:
+        _, dependency, runtime = images.commands(name, SHA)
+        assert "--read-only" in dependency and "--network=none" in dependency
+        assert dependency[dependency.index("--tmpfs") + 1] == (
+            "/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777"
+        )
+        assert "--tmpfs" not in runtime
+        assert dependency[-2:] == ["--offline", "--no-cache"]
+
+
+def test_safe_argv_and_bounded_failure_report_sanitized_stage_and_image():
     def failed(args, **kwargs):
         assert kwargs["shell"] is False and kwargs["timeout"] == 1200
         assert kwargs["capture_output"] is True
         return subprocess.CompletedProcess(
-            args, 1, "synthetic-sensitive-stdout", "synthetic-sensitive-stderr"
+            args,
+            1,
+            "synthetic-sensitive-stdout",
+            "error: failed to create temporary directory /tmp/uv-cache\n"
+            "Authorization: Bearer synthetic-token\nAPI_KEY=synthetic-key\n"
+            "https://user:password@example.invalid/path?token=private\n" + "x" * 4000,
         )
 
     with patch.object(images.subprocess, "run", failed), pytest.raises(RuntimeError) as failure:
-        images.run(["docker", "build", "literal argument"])
-    assert "sensitive" not in str(failure.value)
+        images.run(images.commands("tourism", SHA)[1])
+    message = str(failure.value)
+    assert "dependency-check" in message and "tourism-ci:" + SHA in message
+    assert "failed to create temporary directory" in message
+    assert all(
+        value not in message
+        for value in (
+            "synthetic-sensitive-stdout",
+            "synthetic-token",
+            "synthetic-key",
+            "user:password",
+            "token=private",
+            "--entrypoint",
+        )
+    )
+    assert len(message) <= 1200
 
 
 def test_ci_image_checks_have_no_cloud_credentials():

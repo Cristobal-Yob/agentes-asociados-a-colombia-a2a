@@ -60,6 +60,38 @@ print('Entrypoint factory constructed offline; no inference or mail')
 """
 
 
+def failure_summary(args, stderr):
+    """Expose bounded container diagnostics, never the command or captured stdout."""
+    image = next(
+        (arg for arg in args if re.fullmatch(r"(?:tourism|email)-ci:[a-f0-9]{40}", arg)),
+        "unidentified",
+    )
+    stage = (
+        "build"
+        if args[:2] == ["docker", "build"]
+        else "dependency-check"
+        if "--entrypoint" in args and args[args.index("--entrypoint") + 1] == "uv"
+        else "runtime-import"
+        if args[:2] == ["docker", "run"]
+        else "source-check"
+    )
+    detail = (
+        stderr.decode("utf-8", errors="replace") if isinstance(stderr, bytes) else (stderr or "")
+    )
+    detail = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", detail[:8192])
+    detail = re.sub(r"(?i)\bBearer\s+\S+", "Bearer [redacted]", detail)
+    detail = re.sub(
+        r"(?i)\b(authorization|api[_-]?key|token|secret|password|credential)\b\s*[:=]\s*[^\s,;]+",
+        r"\1=[redacted]",
+        detail,
+    )
+    detail = re.sub(r"https?://[^\s]+", "[url redacted]", detail)
+    detail = re.sub(r"\b(?:gh[pousr]_|github_pat_|ya29\.)[A-Za-z0-9_.-]+", "[redacted]", detail)
+    detail = re.sub(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "[redacted]", detail)
+    detail = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", detail)
+    return f"Container {stage} failed for {image}: {detail.strip()[:1024] or 'no stderr'}"
+
+
 def run(args, *, timeout=1200, binary=False, cwd=None):
     result = subprocess.run(
         args,
@@ -71,7 +103,7 @@ def run(args, *, timeout=1200, binary=False, cwd=None):
         check=False,
     )
     if result.returncode:
-        raise RuntimeError("Command failed: " + " ".join(args[:2]))
+        raise RuntimeError(failure_summary(args, result.stderr))
     return result.stdout
 
 
@@ -91,6 +123,8 @@ def commands(name, sha):
     ]
     check = sandbox + ["--entrypoint", python, tag]
     dependency = sandbox + [
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777",
         "--entrypoint",
         "uv",
         tag,
