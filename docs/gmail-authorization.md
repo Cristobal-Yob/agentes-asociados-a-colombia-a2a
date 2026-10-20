@@ -1,29 +1,62 @@
-# Autorizar el Gmail personal
+# Authorize your own Gmail account explicitly
 
-Remitente fijo: **student@example.com**. Proyecto OAuth: **example-project**. Cliente existente: **Colombia Two Agents Classroom**, de tipo escritorio. La autorización anterior de `learner@example.com` queda preservada y no sirve para esta identidad. El código no inicia sesión por sí solo ni sustituye el consentimiento humano.
+Offline tests and default runtime use mock transport. They do not need a Google
+account or send mail. This optional adapter requires your own approved Desktop
+OAuth client, selected mailbox and private local storage. It never borrows the
+instructor's credentials and requests no mailbox-read permission.
 
-## Consentimiento de la cuenta personal
+## Required live configuration
 
-El administrador del proyecto debe permitir `student@example.com` como usuario de prueba si la aplicación permanece en External / Testing. No se cambia la configuración de Cloud automáticamente. Mantenga los permisos existentes: `openid`, `email` (Google puede devolver su alias userinfo.email) y `gmail.send`; no se piden lectura, modificación, composición, perfil ni permisos de Cloud.
+Set these before starting the Python process; the expected identity is bound at
+module import and is not accepted from a user message:
 
-Prepare un directorio privado existente `work/gmail-oauth-personal` con acceso exclusivo del usuario actual. Desde `outputs/colombia-a2a`, ejecute con el intérprete existente:
+- `GMAIL_EXPECTED_EMAIL`: your exact approved mailbox, not a reserved example.
+- `GMAIL_OAUTH_PROJECT`: the project owning your Desktop OAuth client.
+- `MODEL_MODE=vertex` and `VERTEX_PROJECT_ID`: your separately authorized model scope.
+- `EMAIL_TRANSPORT=gmail`, `EMAIL_SENDER` matching that mailbox, and
+  `ENABLE_REAL_EMAIL=true` only for an approved live exercise.
+- `GMAIL_CREDENTIALS_FILE`: private absolute grant path outside the checkout.
+- `APPROVAL_SIGNING_KEY`: own stable secret, 32 to 4096 bytes, never source-controlled.
+- A private persistent effect ledger (`GMAIL_LEDGER=sqlite` locally or dedicated
+  approved `gcs` for replicated runtime), retained across restarts.
 
-```powershell
-& '../../work/colombia-venv/Scripts/python.exe' -B -m scripts.authorize_gmail --client '../../work/gmail-oauth/desktop-client.json' --output '../../work/gmail-oauth-personal/authorized-user.json'
+Do not paste values into source or `.env.example`. Python does not load an `.env`
+file automatically. Model ADC and Desktop Gmail authorization are independent.
+The source contains no grant, service key or account enrollment.
+
+## Consent helper
+
+First prepare your own Desktop OAuth application, Gmail API access and any required
+test-user/consent configuration under that project. This is separate operator work;
+no helper creates a project or bypasses Google's access decisions.
+
+```sh
+python -B -m scripts.authorize_gmail --client /private/desktop-client.json --output /private/authorized-user.json --signing-key-output /private/approval-key.txt
 ```
 
-Seleccione **student@example.com** y acepte usted mismo los permisos de envío e identidad. El asistente abre Google, recibe la respuesta en un puerto loopback efímero y verifica PKCE, estado, nonce, firma/expiración/audiencia/emisor del ID token y coincidencia de email verificado y sujeto con UserInfo. El proceso dura como máximo cinco minutos y no envía, redacta ni lee correos. Nunca pegue los códigos o el JSON en chat.
+This is an explicit consent action, not an offline quickstart. The helper opens a
+loopback callback and verifies state, PKCE, nonce, signature, issuer, audience,
+expiry, verified email and subject before saving a protected new file. Scopes are
+`openid`, `email` and `gmail.send` only. It does not read or send an email. A timeout
+or denied account is not success; do not reuse a callback code.
 
-El archivo de salida debe ser nuevo; el asistente nunca sobrescribe archivos existentes. Guarda solo credenciales de renovación, identidad y permisos; no conserva tokens de acceso/ID o códigos. En Windows restringe el archivo al usuario actual antes de escribir secretos. La clave persistente existente `work/gmail-oauth/approval-key.txt` y el ledger existente se reutilizan sin copiar, regenerar ni borrar.
+The helper refuses missing configured identity before starting consent. Existing
+files are not overwritten. Reauthorization and rotation need their own scope;
+preserve signing keys and ledgers while approvals may still exist.
 
-Cuando termine, inicie `scripts/start_local.ps1`; si 8002 ya está ocupado, revise y detenga únicamente el proceso propio anterior antes de reiniciar. El inicio rechaza permisos incorrectos o archivos ausentes y no vuelve a la cuenta anterior ni a un transporte simulado. `scripts/mail.ps1` conversa con la API sin leer secretos.
+## Runtime and send evidence
 
-## Envío y renovación
+The Gmail transport refreshes narrow OAuth and checks UserInfo against the selected
+mailbox and stored subject before reserving an effect. Changing a chat message or
+`EMAIL_SENDER` alone cannot select a different identity. A typed send still needs
+an exact signed preview, session, version and approval. A native chat send needs
+current explicit human intent; drafting alone never sends.
 
-Una orden humana suficiente de redactar y enviar puede ejecutar en el mismo turno. Pedir solo un borrador requiere la confirmación posterior de su preview exacto. Cada envío renueva el token y verifica que la identidad real sea **student@example.com**, no solo el encabezado From. El destinatario puede ser cualquier dirección válida suministrada explícitamente; no se agregan Cc/Bcc.
+A durable reservation precedes the provider POST. Accepted receipts reproduce
+without another automatic attempt; reserved/unknown outcomes do not retry. A crash
+can leave uncertainty even before an effect occurred. Do not erase state or create
+new IDs to bypass it. `provider_accepted` does not prove arrival or reading.
 
-Gmail no ofrece aquí una clave de idempotencia. El registro durable admite a lo sumo un intento automático por borrador y por continuación de envío consumida. Los resultados inciertos nunca se reintentan automáticamente. La aceptación de Gmail no demuestra llegada al buzón. Las pruebas usan grants y respuestas ficticios, sin envío real.
-
-Los tokens de una aplicación External / Testing con gmail.send pueden vencer a los siete días, además de revocaciones o políticas. Para renovar, use un archivo nuevo protegido y cambie explícitamente la ruta local, sin sobrescribir el grant anterior. Cloud Run, IAM, GCS y secretos requieren autorización separada y no se configuran con este asistente.
-
-Referencias oficiales: [OAuth de escritorio](https://developers.google.com/identity/protocols/oauth2/native-app), [OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), [permisos Gmail](https://developers.google.com/workspace/gmail/api/auth/scopes), [envío de mensajes](https://developers.google.com/workspace/gmail/api/guides/sending).
+On Cloud Run, shared persistent state and least-privilege identities must be
+provisioned separately; do not use ephemeral SQLite for replicated effects.
+No live mail, OAuth login or cloud change is performed by source publication.

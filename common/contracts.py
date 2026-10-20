@@ -2,12 +2,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StrictBool
 
+from agenda_agent.contracts import AgendaResponse
+from common.correlation import Correlation, ResultCorrelation
+
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class TripContext(Contract):
+class TripContext(Contract, Correlation):
     model_config = ConfigDict(title="Contexto del viaje")
     city: str | None = Field(
         None,
@@ -50,6 +53,8 @@ class TripContext(Contract):
         title="Continuación del correo",
         description="Contexto opaco del agente de correo. Devuelva context sin interpretarlo.",
     )
+    agenda_requested: StrictBool = Field(False, title="Solicitud explícita de agenda")
+    agenda_context: str | None = Field(None, max_length=24000, title="Continuación opaca de Agenda")
 
 
 class Source(Contract):
@@ -89,6 +94,7 @@ class Itinerary(Contract):
 
 
 class EmailPreview(Contract):
+    plan_version: int = Field(1, ge=1, title="Versión aprobada")
     model_config = ConfigDict(title="Vista previa del correo")
     draft_id: str = Field(title="Identificador del borrador")
     session_id: str = Field(min_length=1, max_length=100, title="Sesión")
@@ -115,7 +121,12 @@ class EmailPreview(Contract):
     )
 
 
-class EmailRequest(Contract):
+class EmailContent(Contract):
+    subject: str = Field(min_length=1, max_length=200, pattern=r"^[^\r\n]+$", title="Asunto exacto")
+    text: str = Field(min_length=1, max_length=12000, title="Texto exacto")
+
+
+class EmailRequest(Contract, Correlation):
     model_config = ConfigDict(title="Solicitud de correo")
     action: Literal["draft", "send"] = Field(
         "draft",
@@ -132,6 +143,14 @@ class EmailRequest(Contract):
         examples=["Redacta un recordatorio de la reunión de trabajo del lunes."],
     )
     itinerary: Itinerary | None = Field(None, title="Itinerario")
+    content: EmailContent | None = Field(
+        None,
+        title="Contenido exacto opcional",
+        description=(
+            "Prepara una vista previa del contenido proporcionado; nunca "
+            "autoriza por sí solo el envío."
+        ),
+    )
     preview: EmailPreview | None = Field(
         None, title="Vista previa", description="Vista previa firmada, sin modificar, para enviar."
     )
@@ -156,7 +175,7 @@ class EmailRequest(Contract):
     context: str | None = Field(None, max_length=24000, title="Contexto opaco de conversación")
 
 
-class EmailChatRequest(Contract):
+class EmailChatRequest(Contract, Correlation):
     model_config = ConfigDict(title="Mensaje al agente de correo")
     message: str = Field(
         min_length=1,
@@ -165,7 +184,8 @@ class EmailChatRequest(Contract):
         description="Converse normalmente o solicite redactar y enviar a un destinatario "
         "explícito. "
         "Una orden explícita de envío con datos suficientes envía en ese mismo turno. "
-        "Una solicitud de borrador solo prepara una vista previa.",
+        "Una solicitud de redacción devuelve asunto y texto sin exigir destinatario, "
+        "aprobación ni envío.",
         examples=["Envía a persona@example.com un recordatorio de la reunión de mañana."],
     )
     context: str | None = Field(
@@ -183,26 +203,38 @@ class EmailChatRequest(Contract):
     )
 
 
-class EmailResponse(Contract):
+class EmailResponse(Contract, ResultCorrelation):
     model_config = ConfigDict(title="Respuesta del agente de correo")
     status: Literal[
-        "preview", "simulated", "sent", "delivery_unknown", "error", "clarification", "completed"
+        "preview",
+        "simulated",
+        "sent",
+        "delivery_unknown",
+        "error",
+        "clarification",
+        "completed",
+        "cancelled",
     ] = Field(
         title="Estado",
         description="Resultado del procesamiento; sent no garantiza llegada al buzón.",
     )
     message: str = Field(title="Mensaje")
+    draft: EmailContent | None = Field(
+        None,
+        title="Redacción sin envío",
+        description="Asunto y texto redactados, sin aprobación ni autorización de envío.",
+    )
     preview: EmailPreview | None = Field(None, title="Vista previa")
     approval_token: str | None = Field(None, title="Token de aprobación")
     delivery: str | None = Field(title="Resultado del envío", default=None)
     error_code: str | None = Field(None, title="Código de error")
     context: str | None = Field(None, title="Contexto opaco para el siguiente mensaje")
     conversation_state: (
-        Literal["draft", "awaiting_confirmation", "sent", "failed", "completed"] | None
+        Literal["draft", "awaiting_confirmation", "sent", "failed", "completed", "cancelled"] | None
     ) = Field(None, title="Estado de la conversación")
 
 
-class TourismRequest(Contract):
+class TourismRequest(Contract, Correlation):
     model_config = ConfigDict(title="Solicitud de itinerario")
     message: str = Field(
         default="",
@@ -210,7 +242,8 @@ class TourismRequest(Contract):
         title="Mensaje",
         description="Preferencias para la visita y solicitud opcional de correo. "
         "Una orden explícita "
-        "de envío permite delegarlo en el mismo turno; un borrador conserva su confirmación.",
+        "de envío permite delegarlo en el mismo turno. Una redacción libre puede delegarse "
+        "sin itinerario ni destinatario y no envía ni exige aprobación.",
         examples=["Bogotá, 2 días, cultura; prepáralo por correo para persona@example.com"],
     )
     context: TripContext = Field(default_factory=TripContext, title="Contexto del viaje")
@@ -224,7 +257,7 @@ class TourismRequest(Contract):
     session_id: str = Field(default="classroom", min_length=1, max_length=100, title="Sesión")
 
 
-class TourismResponse(Contract):
+class TourismResponse(Contract, ResultCorrelation):
     model_config = ConfigDict(title="Respuesta del agente de itinerarios")
     status: Literal["completed", "partial", "clarification", "error"] = Field(title="Estado")
     message: str = Field(title="Mensaje")
@@ -232,8 +265,9 @@ class TourismResponse(Contract):
     missing_field: str | None = Field(None, title="Campo pendiente")
     itinerary: Itinerary | None = Field(None, title="Itinerario")
     email: EmailResponse | None = Field(None, title="Respuesta del agente de correo")
+    agenda: AgendaResponse | None = Field(None, title="Respuesta del agente de agenda")
     error_code: str | None = Field(None, title="Código de error")
     retrieval: str = Field("not_requested", title="Estado de consulta de fuentes")
     conversation_state: (
-        Literal["draft", "awaiting_confirmation", "sent", "failed", "completed"] | None
+        Literal["draft", "awaiting_confirmation", "sent", "failed", "completed", "cancelled"] | None
     ) = Field(None, title="Estado de la conversación")

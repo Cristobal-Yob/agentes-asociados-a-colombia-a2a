@@ -14,14 +14,12 @@ async def test_native_sdk_task_and_conversation_context():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1:8001"
     ) as client:
-        result, task = await send_typed(
-            "http://127.0.0.1:8001", {"message": "Hola"}, http_client=client
-        )
+        result, task = await send_typed("http://127.0.0.1:8001", {}, http_client=client)
         assert task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
         assert result["missing_field"] == "city"
         second, continued = await send_typed(
             "http://127.0.0.1:8001",
-            {"message": "Bogotá", "context": result["context"]},
+            {"context": {**result["context"], "city": "Bogota"}},
             task_id=task.id,
             context_id=task.context_id,
             http_client=client,

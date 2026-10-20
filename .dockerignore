@@ -10,3 +10,6 @@
 !tourism_agent/
 !tourism_agent/*.py
 !tourism_agent/Dockerfile
+!agenda_agent/
+!agenda_agent/*.py
+!agenda_agent/Dockerfile

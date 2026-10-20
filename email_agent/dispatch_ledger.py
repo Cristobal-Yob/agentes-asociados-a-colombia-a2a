@@ -106,7 +106,7 @@ async def adc_token():
 
 class GcsLedger:
     def __init__(self, bucket, client=None, token_provider=None):
-        if bucket != "example-project-email-agent-ledger":
+        if bucket != "example-project-colombia-a2a-mail-ledger":
             raise ValueError(
                 "El registro compartido de Gmail exige el bucket dedicado de example-project"
             )

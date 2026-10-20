@@ -34,7 +34,7 @@ def forbid_external_http(monkeypatch):
     [
         (
             {"operation": "select", "sources": [{"id": "known-id", "name": "Original name"}]},
-            {"ids": ["known-id"]},
+            {"ids": ["known-id"], "email_action": "none"},
         ),
         (
             {"operation": "draft", "request": "Write a welcome", "itinerary_text": ""},
@@ -45,8 +45,11 @@ def forbid_external_http(monkeypatch):
 async def test_provider_receives_spanish_instruction_without_changing_payload(
     monkeypatch, payload, reply
 ):
+    from types import SimpleNamespace
+
     captured = {}
     credentials = object()
+    structured = langchain_google_genai.ChatGoogleGenerativeAI.with_structured_output
 
     def adc(**kwargs):
         captured["adc"] = kwargs
@@ -59,16 +62,26 @@ async def test_provider_receives_spanish_instruction_without_changing_payload(
             captured["messages"] = prompt.messages
             return AIMessage(content=json.dumps(reply))
 
-        return RunnableLambda(invoke)
+        model = RunnableLambda(invoke)
+        model.with_structured_output = lambda schema, **options: structured(
+            SimpleNamespace(bind=lambda **_: model), schema, **options
+        )
+        return model
 
     monkeypatch.setattr(google.auth, "default", adc)
     monkeypatch.setattr(langchain_google_genai, "ChatGoogleGenerativeAI", provider)
-    port = ModelPort(Settings(model_call_limit=1))
+    port = ModelPort(
+        Settings(model_mode="vertex", vertex_project="example-project", model_call_limit=1)
+    )
     assert await port.invoke(payload) == reply
     system, human = captured["messages"]
     assert "español" in system.content.lower()
-    assert "asunto" in system.content.lower() and "texto" in system.content.lower()
-    assert "identificadores" in system.content.lower() and "citas" in system.content.lower()
+    assert "identificadores" in system.content.lower()
+    if payload["operation"] == "select":
+        assert "email_action" in system.content and "Para draft" not in system.content
+    else:
+        assert "asunto" in system.content.lower() and "texto" in system.content.lower()
+        assert "citas" in system.content.lower()
     assert json.loads(human.content) == payload
     assert captured["adc"]["quota_project_id"] == "example-project"
     model = captured["settings"]

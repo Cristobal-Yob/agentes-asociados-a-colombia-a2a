@@ -35,3 +35,12 @@ docs/api-localization.md
 docs/live-llm.json
 docs/live-mcp.json
 docs/latency.json
+
+# Local credential formats, never publication material.
+client_secret*.json
+service-account*.json
+application_default_credentials.json
+credentials.json
+token.json
+token-*.json
+calendar-oauth*/

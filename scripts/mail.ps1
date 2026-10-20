@@ -1,6 +1,7 @@
 ﻿param(
     [string]$Message,
-    [string]$ApiUrl = 'http://127.0.0.1:8002'
+    [string]$ApiUrl = 'http://127.0.0.1:8002',
+    [string]$ApiKeyFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,20 @@ if (-not [Uri]::TryCreate($ApiUrl, [UriKind]::Absolute, [ref]$base) -or
     $base.UserInfo -or $base.Query -or $base.Fragment -or $base.AbsolutePath -ne '/') {
     throw 'Use una URL base local de correo, sin credenciales, ruta, consulta ni fragmento.'
 }
+$apiKey = $env:EMAIL_AGENT_API_KEY
+if (-not $apiKey) {
+    if (-not $ApiKeyFile) { $ApiKeyFile = $env:EMAIL_AGENT_API_KEY_FILE }
+    if (-not $ApiKeyFile) { $ApiKeyFile = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../work/service-auth/email-api-key.txt')) }
+    $file = Get-Item -LiteralPath $ApiKeyFile
+    if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $file.Length -lt 32 -or $file.Length -gt 4096) { throw 'Archivo de clave de Correo no válido.' }
+    $acl = Get-Acl -LiteralPath $ApiKeyFile
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    if (-not $acl.AreAccessRulesProtected -or $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $identity) { throw 'La clave de Correo debe ser privada y exclusiva.' }
+    foreach ($rule in $acl.Access) { if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -ne $identity) { throw 'La clave de Correo permite acceso a otra identidad.' } }
+    $apiKey = (Get-Content -LiteralPath $ApiKeyFile -Raw -Encoding UTF8).Trim()
+}
+$headers = @{'X-API-Key'=$apiKey}
+$requestId=$null; $sessionId=$null; $planVersion=$null
 $endpoint = $base.AbsoluteUri.TrimEnd('/') + '/api/chat'
 if (-not $Message.Trim()) { $Message = Read-Host 'Converse o indique qué mensaje desea redactar y enviar y a quién' }
 $context = $null
@@ -22,9 +37,10 @@ for ($turn = 0; $turn -lt 20; $turn++) {
     }
     $request = @{message = $Message}
     if ($context) { $request.context = $context }
+    if ($requestId) { $request.request_id=$requestId; $request.session_id=$sessionId; $request.plan_version=$planVersion }
     $json = $request | ConvertTo-Json -Depth 15 -Compress
     try {
-        $reply = Invoke-RestMethod -Uri $endpoint -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 45 -MaximumRedirection 0 -ErrorAction Stop
+        $reply = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 45 -MaximumRedirection 0 -ErrorAction Stop
     } catch {
         Write-Warning 'No se recibió un resultado seguro. No se repitió la petición. Si había un envío en curso, su entrega puede ser incierta.'
         return
@@ -33,8 +49,9 @@ for ($turn = 0; $turn -lt 20; $turn++) {
         Write-Warning 'La respuesta no permite determinar el resultado. No se reintentó.'
         return
     }
+    if ($reply.request_id) { $requestId=$reply.request_id; $sessionId=$reply.session_id; $planVersion=$reply.plan_version }
     if ($reply.status -eq 'sent') {
-        if (($displayedGmailPreview -or ($reply.preview -and $reply.preview.transport -eq 'gmail' -and $reply.preview.sender -eq 'student@example.com' -and $reply.preview.recipient -and $reply.preview.subject -and $reply.preview.text)) -and $reply.delivery -eq 'provider_accepted' -and
+        if (($displayedGmailPreview -or ($reply.preview -and $reply.preview.transport -eq 'gmail' -and $reply.preview.sender -eq $env:GMAIL_EXPECTED_EMAIL -and $reply.preview.recipient -and $reply.preview.subject -and $reply.preview.text)) -and $reply.delivery -eq 'provider_accepted' -and
             $reply.conversation_state -eq 'sent') {
             if ($reply.preview) {
                 Write-Host ('Remitente: ' + $reply.preview.sender)
@@ -77,11 +94,11 @@ for ($turn = 0; $turn -lt 20; $turn++) {
         Write-Host ('Transporte: ' + $preview.transport)
         Write-Host 'Texto exacto:'
         Write-Host $preview.text
-        if ($preview.transport -eq 'gmail' -and $preview.sender -ne 'student@example.com') {
-            Write-Warning 'La API usa otro remitente. Inicie el perfil personal correcto antes de continuar.'
+        if ($preview.transport -eq 'gmail' -and $preview.sender -ne $env:GMAIL_EXPECTED_EMAIL) {
+            Write-Warning 'La API usa otro remitente. Inicie el perfil de clases correcto antes de continuar.'
             return
         }
-        $displayedGmailPreview = $preview.transport -eq 'gmail' -and $preview.sender -eq 'student@example.com'
+        $displayedGmailPreview = $preview.transport -eq 'gmail' -and $preview.sender -eq $env:GMAIL_EXPECTED_EMAIL
     }
     if (-not ($reply.context -is [string]) -or -not $reply.context) {
         Write-Warning 'Falta el contexto de continuación válido. No se hizo otra petición.'

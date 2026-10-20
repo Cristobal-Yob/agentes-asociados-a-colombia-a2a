@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agente de itinerarios en Colombia",
-    "description": "Prepara sugerencias basadas en fuentes del cat\u00e1logo y puede solicitar un borrador al agente de correo mediante A2A. Tras revisar la vista previa, puede delegar su confirmaci\u00f3n expl\u00edcita al agente de correo. Los ejemplos no reservan actividades ni verifican precios, horarios o condiciones de seguridad.",
+    "description": "Converse en espa\u00f1ol: el modelo decide autom\u00e1ticamente si responde o utiliza herramientas para generar un itinerario y consultar a otros agentes. Conserva historial acotado y plan vigente por request_id y session_id. Prepara sugerencias basadas en fuentes del cat\u00e1logo y puede solicitar un borrador al agente de correo mediante A2A, tambi\u00e9n sobre temas libres sin itinerario. Redactar no env\u00eda ni exige destinatario o aprobaci\u00f3n. Una orden actual suficiente permite enviar sin otra aprobaci\u00f3n. Los ejemplos no reservan actividades ni verifican precios, horarios o condiciones de seguridad. Puede delegar a Agenda si solicita agendar; requiere fecha, zona, hora y duraci\u00f3n expl\u00edcitas y confirmaci\u00f3n de la propuesta. El correo posterior contiene solo eventos comprobados en Calendar.",
     "version": "0.1.0"
   },
   "paths": {
@@ -32,7 +32,7 @@
           "Itinerarios"
         ],
         "summary": "Consultar o completar un itinerario",
-        "description": "Indique ciudad, duraci\u00f3n e intereses. Si falta informaci\u00f3n, el agente solicita un dato por vez. Puede pedir correo en el propio message con destinatario expl\u00edcito. Devuelva context intacto en el turno siguiente; despu\u00e9s de revisar la vista previa responda \u00abS\u00ed, env\u00edalo\u00bb. draft_email sigue siendo compatible. Una orden expl\u00edcita completa de env\u00edo permite delegar su ejecuci\u00f3n en ese turno; pedir solo un borrador conserva la confirmaci\u00f3n posterior.",
+        "description": "Puede saludar, conversar, solicitar un plan y despu\u00e9s pedir correo sin regenerar el itinerario. El modelo decide si usa herramientas; si faltan datos, pregunta. Conserve request_id y session_id para continuar, tambi\u00e9n tras reiniciar, sin copiar context. plan_version es opcional; si lo env\u00eda, use el valor de la \u00faltima respuesta. Puede pedir una redacci\u00f3n libre en message sin destinatario ni plan. draft_email sigue siendo compatible. Una orden expl\u00edcita completa de env\u00edo permite delegar su ejecuci\u00f3n en ese turno; pedir solo un borrador devuelve asunto y texto sin enviar ni pedir aprobaci\u00f3n.",
         "operationId": "chat_api_chat_post",
         "requestBody": {
           "content": {
@@ -41,10 +41,49 @@
                 "$ref": "#/components/schemas/TourismRequest"
               },
               "examples": {
+                "01_greeting": {
+                  "summary": "1. Saludar",
+                  "description": "Ejecute primero este paso. Conserve los mismos IDs para los pasos 2 y 3. Para otra conversaci\u00f3n, cambie request_id.",
+                  "value": {
+                    "message": "Hola",
+                    "request_id": "charla-student-01",
+                    "session_id": "student-local"
+                  }
+                },
+                "02_name": {
+                  "summary": "2. Presentarse",
+                  "description": "Despu\u00e9s del paso 1, ejecute este ejemplo sin cambiar request_id ni session_id. Para otra conversaci\u00f3n, cambie request_id.",
+                  "value": {
+                    "message": "Me llamo Student",
+                    "request_id": "charla-student-01",
+                    "session_id": "student-local"
+                  }
+                },
+                "03_recall_name": {
+                  "summary": "3. Recordar el nombre",
+                  "description": "Despu\u00e9s del paso 2, pregunte con los mismos IDs de los pasos 1 y 2. Para otra conversaci\u00f3n, cambie request_id.",
+                  "value": {
+                    "message": "\u00bfC\u00f3mo me llamo?",
+                    "request_id": "charla-student-01",
+                    "session_id": "student-local"
+                  }
+                },
                 "primera_solicitud": {
                   "summary": "Primer mensaje, sin contexto previo",
                   "value": {
                     "message": "Bogot\u00e1, 2 d\u00edas, cultura; prepara el itinerario por correo para persona@example.com."
+                  }
+                },
+                "redaccion_libre": {
+                  "summary": "Redacci\u00f3n libre por Correo, sin itinerario ni env\u00edo",
+                  "value": {
+                    "message": "Redacta un correo amable para reagendar una clase."
+                  }
+                },
+                "agenda_y_correo": {
+                  "summary": "Proponer agenda del itinerario y resumen por correo",
+                  "value": {
+                    "message": "Bogot\u00e1, 3 d\u00edas, cultura; agenda desde 2030-05-06 a las 10:00 en America/Bogota, 60 minutos por d\u00eda y env\u00eda resumen a persona@example.com."
                   }
                 }
               }
@@ -73,7 +112,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ]
       }
     },
     "/.well-known/agent-card.json": {
@@ -138,12 +182,463 @@
             },
             "example": "1.0"
           }
+        ],
+        "security": [
+          {
+            "Clave del servicio": []
+          }
         ]
+      }
+    },
+    "/api/requests/{request_id}": {
+      "get": {
+        "tags": [
+          "Estado durable"
+        ],
+        "summary": "Consultar solicitud y operaciones",
+        "operationId": "request_state_api_requests__request_id__get",
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
   "components": {
     "schemas": {
+      "AgendaEvent": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "start",
+          "end",
+          "timezone"
+        ],
+        "title": "AgendaEvent"
+      },
+      "AgendaPreview": {
+        "properties": {
+          "plan_id": {
+            "type": "string",
+            "title": "Plan Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "calendar_id": {
+            "type": "string",
+            "const": "primary",
+            "title": "Calendar Id",
+            "default": "primary"
+          },
+          "account": {
+            "type": "string",
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Account"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AgendaEvent"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Events"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient"
+          },
+          "mail_requested": {
+            "type": "boolean",
+            "title": "Mail Requested",
+            "default": false
+          },
+          "expires_at": {
+            "type": "integer",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plan_id",
+          "session_id",
+          "events",
+          "expires_at"
+        ],
+        "title": "AgendaPreview"
+      },
+      "AgendaResponse": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesi\u00f3n de la solicitud"
+          },
+          "workflow_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado durable"
+          },
+          "a2a_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarea A2A remota"
+          },
+          "a2a_context_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto A2A remoto"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "clarification",
+              "preview",
+              "created",
+              "conflict",
+              "creation_unknown",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgendaPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingAgendaPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/CreatedEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "missing_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Field"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "AgendaResponse"
+      },
+      "AgendaSpec": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha inicial"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zona horaria IANA"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{2}:\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora local inicial"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSpec"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Actividades"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AgendaSpec"
+      },
+      "CreatedEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "start",
+          "end",
+          "link"
+        ],
+        "title": "CreatedEvent"
+      },
       "Day": {
         "properties": {
           "day": {
@@ -174,8 +669,38 @@
         ],
         "title": "D\u00eda del itinerario"
       },
+      "EmailContent": {
+        "properties": {
+          "subject": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]+$",
+            "title": "Asunto exacto"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Texto exacto"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "subject",
+          "text"
+        ],
+        "title": "EmailContent"
+      },
       "EmailPreview": {
         "properties": {
+          "plan_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Versi\u00f3n aprobada",
+            "default": 1
+          },
           "draft_id": {
             "type": "string",
             "title": "Identificador del borrador"
@@ -248,6 +773,88 @@
       },
       "EmailResponse": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesi\u00f3n de la solicitud"
+          },
+          "workflow_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado durable"
+          },
+          "a2a_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarea A2A remota"
+          },
+          "a2a_context_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto A2A remoto"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -257,7 +864,8 @@
               "delivery_unknown",
               "error",
               "clarification",
-              "completed"
+              "completed",
+              "cancelled"
             ],
             "title": "Estado",
             "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n."
@@ -265,6 +873,18 @@
           "message": {
             "type": "string",
             "title": "Mensaje"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailContent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redacci\u00f3n sin env\u00edo",
+            "description": "Asunto y texto redactados, sin aprobaci\u00f3n ni autorizaci\u00f3n de env\u00edo."
           },
           "preview": {
             "anyOf": [
@@ -330,7 +950,8 @@
                   "awaiting_confirmation",
                   "sent",
                   "failed",
-                  "completed"
+                  "completed",
+                  "cancelled"
                 ]
               },
               {
@@ -412,6 +1033,72 @@
         ],
         "title": "Itinerario"
       },
+      "PendingAgendaPlan": {
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/AgendaSpec"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient"
+          },
+          "mail_requested": {
+            "type": "boolean",
+            "title": "Mail Requested",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "spec"
+        ],
+        "title": "PendingAgendaPlan"
+      },
+      "SessionSpec": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Actividad"
+          },
+          "duration_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duraci\u00f3n en minutos"
+          },
+          "day_offset": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "D\u00edas desde la fecha inicial",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SessionSpec"
+      },
       "Source": {
         "properties": {
           "id": {
@@ -491,11 +1178,49 @@
       },
       "TourismRequest": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
           "message": {
             "type": "string",
             "maxLength": 4000,
             "title": "Mensaje",
-            "description": "Preferencias para la visita y solicitud opcional de correo. Una orden expl\u00edcita de env\u00edo permite delegarlo en el mismo turno; un borrador conserva su confirmaci\u00f3n.",
+            "description": "Preferencias para la visita y solicitud opcional de correo. Una orden expl\u00edcita de env\u00edo permite delegarlo en el mismo turno. Una redacci\u00f3n libre puede delegarse sin itinerario ni destinatario y no env\u00eda ni exige aprobaci\u00f3n.",
             "default": "",
             "examples": [
               "Bogot\u00e1, 2 d\u00edas, cultura; prep\u00e1ralo por correo para persona@example.com"
@@ -539,6 +1264,88 @@
       },
       "TourismResponse": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesi\u00f3n de la solicitud"
+          },
+          "workflow_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado durable"
+          },
+          "a2a_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarea A2A remota"
+          },
+          "a2a_context_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto A2A remoto"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -589,6 +1396,17 @@
             ],
             "title": "Respuesta del agente de correo"
           },
+          "agenda": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgendaResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respuesta del agente de agenda"
+          },
           "error_code": {
             "anyOf": [
               {
@@ -614,7 +1432,8 @@
                   "awaiting_confirmation",
                   "sent",
                   "failed",
-                  "completed"
+                  "completed",
+                  "cancelled"
                 ]
               },
               {
@@ -635,6 +1454,44 @@
       },
       "TripContext": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
           "city": {
             "anyOf": [
               {
@@ -717,6 +1574,23 @@
             ],
             "title": "Continuaci\u00f3n del correo",
             "description": "Contexto opaco del agente de correo. Devuelva context sin interpretarlo."
+          },
+          "agenda_requested": {
+            "type": "boolean",
+            "title": "Solicitud expl\u00edcita de agenda",
+            "default": false
+          },
+          "agenda_context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continuaci\u00f3n opaca de Agenda"
           }
         },
         "additionalProperties": false,
@@ -1239,6 +2113,14 @@
             ]
           }
         }
+      }
+    },
+    "securitySchemes": {
+      "Clave del servicio": {
+        "type": "apiKey",
+        "description": "Clave privada de esta API. No es una autorizaci\u00f3n de env\u00edo ni una identidad personal.",
+        "in": "header",
+        "name": "X-API-Key"
       }
     }
   }

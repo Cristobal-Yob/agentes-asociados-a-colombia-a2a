@@ -9,10 +9,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
-PROJECT = "example-project"
+PROJECT = os.getenv("RELEASE_GCP_PROJECT", "example-project")
 REGION = "us-central1"
 REPOSITORY = "example-agents"
-BUCKET = f"{PROJECT}-email-agent-ledger"
+BUCKET = f"{PROJECT}-colombia-a2a-mail-ledger"
 SERVICES = {"email-agent": "email", "itinerary-agent": "tourism"}
 IMAGE_ROOT = f"{REGION}-docker.pkg.dev/{PROJECT}/{REPOSITORY}"
 
@@ -27,6 +27,11 @@ def require(condition, message):
 
 
 def validate_request(env):
+    require(
+        re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", env.get("RELEASE_GCP_PROJECT", ""))
+        and env["RELEASE_GCP_PROJECT"] == PROJECT,
+        "Configure el proyecto de despliegue explicito antes de ejecutar.",
+    )
     expected = env.get("EXPECTED_GITHUB_REPOSITORY", "")
     require(
         re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", expected)
@@ -52,7 +57,8 @@ def validate_request(env):
     account = env.get("GCP_DEPLOY_SERVICE_ACCOUNT", "")
     require(
         re.fullmatch(
-            r"[a-z][a-z0-9-]{4,28}[a-z0-9]@example-project\.iam\.gserviceaccount\.com", account
+            rf"[a-z][a-z0-9-]{{4,28}}[a-z0-9]@{re.escape(PROJECT)}\.iam\.gserviceaccount\.com",
+            account,
         )
         and account not in {f"{service}@{PROJECT}.iam.gserviceaccount.com" for service in SERVICES},
         "Configure una cuenta de despliegue separada en example-project.",
@@ -152,7 +158,9 @@ def validate_service(raw, name, email_url=None):
         return []
     expected.update(
         EMAIL_TRANSPORT="gmail",
-        EMAIL_SENDER="student@example.com",
+        EMAIL_SENDER=os.getenv("GMAIL_EXPECTED_EMAIL", "sender@example.com"),
+        GMAIL_EXPECTED_EMAIL=os.getenv("GMAIL_EXPECTED_EMAIL", "sender@example.com"),
+        GMAIL_OAUTH_PROJECT=PROJECT,
         ENABLE_REAL_EMAIL="true",
         GMAIL_LEDGER="gcs",
         GMAIL_LEDGER_BUCKET=BUCKET,
@@ -160,7 +168,7 @@ def validate_service(raw, name, email_url=None):
     )
     require(
         all(env.get(key) == value for key, value in expected.items()),
-        "Runtime de Gmail personal/GCS incompatible.",
+        "Runtime de Gmail de clases/GCS incompatible.",
     )
     approval = next((item for item in entries if item["name"] == "APPROVAL_SIGNING_KEY"), {})
     require("value" not in approval, "La clave de aprobación debe proceder de Secret Manager.")
@@ -301,6 +309,7 @@ def stage_runtime(source, destination):
     paths = [source / "pyproject.toml", source / "uv.lock"]
     for package in ("common", "email_agent", "tourism_agent"):
         paths.extend(sorted((source / package).glob("*.py")))
+    paths.extend(source / "agenda_agent" / name for name in ("__init__.py", "contracts.py"))
     paths.extend(source / package / "Dockerfile" for package in ("email_agent", "tourism_agent"))
     require(
         all(

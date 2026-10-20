@@ -30,26 +30,27 @@ def distribution(samples):
 
 async def run_probe(samples=20):
     with OwnedServices() as services:
+
+        async def send_peer(base, payload, **kwargs):
+            role = "tourism" if base == services.tour_url else "email"
+            return await send_typed(base, payload, api_key=services.keys[role], **kwargs)
+
         services.start("tourism")
-        partial, _ = await send_typed(
+        partial, _ = await send_peer(
             services.tour_url, {**TRIP, "draft_email": True, "recipient": "student@example.com"}
         )
         assert partial["status"] == "partial" and partial["itinerary"]
         services.start("email")
-        context = {}
-        for text, missing in [
-            ("Hola", "city"),
-            ("Bogotá", "days"),
-            ("2 días", "interests"),
-            ("cultura", None),
+        for context, missing in [
+            ({}, "city"),
+            ({"city": "Bogota"}, "days"),
+            ({"city": "Bogota", "days": 2}, "interests"),
+            (TRIP["context"], None),
         ]:
-            result, task = await send_typed(
-                services.tour_url, {"message": text, "context": context}
-            )
-            context = result["context"]
+            result, task = await send_peer(services.tour_url, {"context": context})
             assert result.get("missing_field") == missing
         assert task.status.state == TaskState.TASK_STATE_COMPLETED
-        direct, direct_task = await send_typed(services.email_url, DRAFT)
+        direct, direct_task = await send_peer(services.email_url, DRAFT)
         assert direct["status"] == "preview"
         assert direct_task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED
         assert direct["preview"]["transport"] == "mock", "La prueba nunca confirma correo real"
@@ -60,15 +61,15 @@ async def run_probe(samples=20):
             "approval_token": direct["approval_token"],
             "confirmed": False,
         }
-        rejected, _ = await send_typed(services.email_url, send)
+        rejected, _ = await send_peer(services.email_url, send)
         assert rejected["error_code"] == "approval_invalid"
         send["confirmed"] = True
-        sent, _ = await send_typed(
+        sent, _ = await send_peer(
             services.email_url, send, task_id=direct_task.id, context_id=direct_task.context_id
         )
         assert sent["status"] == "simulated" and sent["delivery"] == "simulated_only"
         integrated_payload = {**TRIP, "draft_email": True, "recipient": "student@example.com"}
-        integrated, _ = await send_typed(services.tour_url, integrated_payload)
+        integrated, _ = await send_peer(services.tour_url, integrated_payload)
         assert integrated["status"] == "completed"
         assert integrated["email"]["status"] == "preview"
         measurements = {}
@@ -80,14 +81,14 @@ async def run_probe(samples=20):
             elapsed = []
             for _ in range(samples):
                 start = time.perf_counter()
-                result, _ = await send_typed(base, payload)
+                result, _ = await send_peer(base, payload)
                 assert result["status"] in {"completed", "preview"}
                 elapsed.append((time.perf_counter() - start) * 1000)
             measurements[label] = distribution(elapsed)
 
         async def concurrent_request():
             start = time.perf_counter()
-            result, _ = await send_typed(services.tour_url, integrated_payload)
+            result, _ = await send_peer(services.tour_url, integrated_payload)
             assert result["status"] == "completed"
             return (time.perf_counter() - start) * 1000
 
@@ -111,7 +112,7 @@ async def run_probe(samples=20):
             "latency": measurements,
             "scenarios": [
                 "turismo conserva el itinerario sin agente remoto",
-                "conversación en español sin estado del servidor",
+                "aclaraciones del contrato tipado sin intérprete de texto",
                 "vista previa directa de correo",
                 "rechazo sin consentimiento explícito y confirmación simulada",
                 "continuación nativa de tarea y contexto",

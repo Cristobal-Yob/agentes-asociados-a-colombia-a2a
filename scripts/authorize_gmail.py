@@ -1,4 +1,4 @@
-"""Autorización OAuth de escritorio operada por una persona. No lee, redacta ni envía correos."""
+"""Autorice sender@example.com mediante OAuth de escritorio. No lee ni envía correos."""
 
 import argparse
 import base64
@@ -19,18 +19,21 @@ import httpx
 from google.oauth2 import id_token
 
 from email_agent.gmail_auth import (
+    PROJECT,
     SCOPES,
     SENDER,
     TOKEN_URL,
     USERINFO_URL,
     OAuthError,
     normalized_scopes,
+    require_live_identity,
     validate_credentials,
     verify_identity,
 )
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 CERT_URL = "https://www.googleapis.com/oauth2/v1/certs"
+CONSENT_WINDOW_SECONDS = 1800
 
 
 def load_client(path):
@@ -40,7 +43,7 @@ def load_client(path):
             raise OAuthError("desktop_client_invalid")
         data = json.loads(target.read_text(encoding="utf-8"))["installed"]
         if (
-            data.get("project_id") != "example-project"
+            data.get("project_id") != PROJECT
             or data.get("auth_uri") not in {AUTH_URL, "https://accounts.google.com/o/oauth2/auth"}
             or data.get("token_uri") != TOKEN_URL
             or not isinstance(data.get("client_id"), str)
@@ -52,12 +55,12 @@ def load_client(path):
         return data
     except Exception:
         raise OAuthError(
-            "Se exige un cliente OAuth de escritorio válido de example-project"
+            "Se exige un cliente OAuth de escritorio del proyecto configurado"
         ) from None
 
 
 class OAuthFlow:
-    def __init__(self, config, redirect_uri, clock=None):
+    def __init__(self, config, redirect_uri, clock=None, *, scopes=None):
         redirect = urlsplit(redirect_uri)
         if (
             redirect.scheme != "http"
@@ -69,9 +72,10 @@ class OAuthFlow:
         ):
             raise OAuthError("loopback_redirect_required")
         self.config = config
+        self.scopes = SCOPES if scopes is None else scopes
         self.redirect_uri = redirect_uri
         self.clock = clock or time.monotonic
-        self.deadline = self.clock() + 300
+        self.deadline = self.clock() + CONSENT_WINDOW_SECONDS
         self.state = secrets.token_urlsafe(32)
         self.nonce = secrets.token_urlsafe(32)
         self.verifier = secrets.token_urlsafe(64)
@@ -93,7 +97,7 @@ class OAuthFlow:
                     "client_id": self.config["client_id"],
                     "redirect_uri": self.redirect_uri,
                     "response_type": "code",
-                    "scope": " ".join(sorted(SCOPES)),
+                    "scope": " ".join(sorted(self.scopes)),
                     "state": self.state,
                     "nonce": self.nonce,
                     "code_challenge": challenge,
@@ -161,7 +165,7 @@ class OAuthFlow:
             response.raise_for_status()
             tokens = response.json()
             if (
-                normalized_scopes(tokens.get("scope")) != SCOPES
+                normalized_scopes(tokens.get("scope")) != self.scopes
                 or tokens.get("token_type", "").lower() != "bearer"
             ):
                 raise OAuthError("gmail_scope_invalid")
@@ -186,16 +190,16 @@ class OAuthFlow:
             sub = self.accept_claims(claims, response.json())
             values = {
                 "type": "authorized_user",
-                "project_id": "example-project",
+                "project_id": PROJECT,
                 "client_id": self.config["client_id"],
                 "client_secret": self.config["client_secret"],
                 "refresh_token": tokens["refresh_token"],
                 "token_uri": TOKEN_URL,
                 "account_email": SENDER,
                 "account_sub": sub,
-                "scopes": sorted(SCOPES),
+                "scopes": sorted(self.scopes),
             }
-            validate_credentials(values)
+            validate_credentials(values, expected_scopes=self.scopes)
             return values
         except Exception:
             raise OAuthError(
@@ -243,12 +247,12 @@ def _private_write(path, data):
             os.close(fd)
 
 
-def save_credentials(path, values):
-    validate_credentials(values)
+def save_credentials(path, values, *, expected_scopes=None):
+    validate_credentials(values, expected_scopes=expected_scopes)
     _private_write(path, json.dumps(values, indent=2) + "\n")
 
 
-def receive_callback(config, browser=webbrowser.open):
+def receive_callback(config, browser=webbrowser.open, *, scopes=None):
     result = {}
 
     class LoopbackServer(HTTPServer):
@@ -288,7 +292,12 @@ def receive_callback(config, browser=webbrowser.open):
 
     with LoopbackServer(("127.0.0.1", 0), Handler) as server:
         server.timeout = 1
-        flow = OAuthFlow(config, f"http://127.0.0.1:{server.server_port}/callback")
+        redirect = f"http://127.0.0.1:{server.server_port}/callback"
+        flow = (
+            OAuthFlow(config, redirect)
+            if scopes is None
+            else OAuthFlow(config, redirect, scopes=scopes)
+        )
         if not browser(flow.authorization_url()):
             raise OAuthError(
                 "No se pudo abrir el navegador para obtener el consentimiento explícito"
@@ -318,6 +327,7 @@ def main():
     )
     args = parser.parse_args()
     try:
+        require_live_identity()
         _output_target(args.output)
         if args.signing_key_output:
             _output_target(args.signing_key_output)
@@ -328,7 +338,7 @@ def main():
         config = load_client(args.client)
         print(
             "El navegador solicitará permisos limitados de envío de Gmail y verificación de "
-            "identidad para student@example.com. No se lee, redacta ni envía ningún correo."
+            f"identidad para {SENDER}. No se lee, redacta ni envía ningún correo."
         )
         flow, code = receive_callback(config)
         with httpx.Client(timeout=4, follow_redirects=False) as client:

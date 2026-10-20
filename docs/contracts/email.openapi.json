@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agente independiente de correo",
-    "description": "Redacta correos de cualquier tema a partir de una solicitud directa y un destinatario expl\u00edcito; tambi\u00e9n puede recibir un itinerario. No requiere conectarse a turismo. Una orden expl\u00edcita de redactar y enviar con datos suficientes permite enviar desde student@example.com en ese turno. Los borradores requieren una confirmaci\u00f3n posterior. La aceptaci\u00f3n del proveedor no garantiza la llegada al buz\u00f3n.",
+    "description": "Redacta correos de cualquier tema sin exigir destinatario ni aprobaci\u00f3n; tambi\u00e9n puede recibir un itinerario. No requiere conectarse a turismo. Una orden expl\u00edcita de redactar y enviar con datos suficientes permite enviar desde su cuenta configurada en ese turno. Redactar no env\u00eda. Enviar una redacci\u00f3n vigente exige una orden humana actual, sin otro paso de aprobaci\u00f3n. La aceptaci\u00f3n del proveedor no garantiza la llegada al buz\u00f3n.",
     "version": "0.1.0"
   },
   "paths": {
@@ -31,8 +31,8 @@
         "tags": [
           "Conversaci\u00f3n"
         ],
-        "summary": "Conversar, redactar y enviar desde su Gmail personal",
-        "description": "Env\u00ede solo message. Si la respuesta incluye context, devu\u00e9lvalo intacto junto con el siguiente message. Una orden expl\u00edcita de env\u00edo con destinatario y contenido suficientes redacta y env\u00eda en el mismo turno. Pedir solo redactar devuelve una vista previa; en ese caso \u00abS\u00ed, env\u00edalo\u00bb con context confirma el texto exacto.",
+        "summary": "Conversar, redactar y enviar desde el Gmail de clases",
+        "description": "Env\u00ede message y conserve los IDs devueltos para continuar. Pedir redactar devuelve asunto y texto sin exigir destinatario ni aprobaci\u00f3n y sin enviar. Una orden expl\u00edcita actual de env\u00edo con datos suficientes env\u00eda en ese turno, sin pedir otra aprobaci\u00f3n. Para enviar una redacci\u00f3n anterior conserve request_id, session_id y la plan_version actual. No necesita copiar context.",
         "operationId": "chat_api_chat_post",
         "requestBody": {
           "content": {
@@ -41,6 +41,12 @@
                 "$ref": "#/components/schemas/EmailChatRequest"
               },
               "examples": {
+                "redaccion_libre": {
+                  "summary": "Redactar sin destinatario ni env\u00edo",
+                  "value": {
+                    "message": "Redacta un correo amable para reagendar una clase."
+                  }
+                },
                 "primera_solicitud": {
                   "summary": "Primer mensaje, sin contexto previo",
                   "value": {
@@ -54,28 +60,23 @@
         },
         "responses": {
           "200": {
-            "description": "Aclaraci\u00f3n, vista previa pendiente de confirmaci\u00f3n o resultado real",
+            "description": "Redacci\u00f3n lista, respuesta conversacional o resultado real del env\u00edo",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmailResponse"
                 },
                 "examples": {
-                  "vista_previa": {
-                    "summary": "Vista previa ilustrativa, sin autorizaci\u00f3n ni env\u00edo",
+                  "redaccion": {
+                    "summary": "Redacci\u00f3n ilustrativa, sin aprobaci\u00f3n ni env\u00edo",
                     "value": {
-                      "status": "preview",
-                      "message": "Ejemplo ilustrativo: revise la vista previa real y devuelva su context antes de confirmar. Este ejemplo no contiene una aprobaci\u00f3n v\u00e1lida.",
-                      "conversation_state": "awaiting_confirmation",
-                      "preview": {
-                        "draft_id": "BORRADOR_ILUSTRATIVO",
-                        "session_id": "SESION_ILUSTRATIVA",
-                        "recipient": "persona@example.com",
+                      "status": "completed",
+                      "message": "Asunto: Recordatorio de reuni\u00f3n\n\nLe recordamos la reuni\u00f3n de ma\u00f1ana.",
+                      "conversation_state": "draft",
+                      "delivery": "not_attempted",
+                      "draft": {
                         "subject": "Recordatorio de reuni\u00f3n",
-                        "text": "Le recordamos la reuni\u00f3n de ma\u00f1ana.",
-                        "transport": "gmail",
-                        "sender": "REMITENTE_CONFIGURADO",
-                        "expires_at": 0
+                        "text": "Le recordamos la reuni\u00f3n de ma\u00f1ana."
                       }
                     }
                   }
@@ -93,7 +94,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ]
       }
     },
     "/api/email": {
@@ -135,7 +141,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ]
       }
     },
     "/.well-known/agent-card.json": {
@@ -200,7 +211,66 @@
             },
             "example": "1.0"
           }
+        ],
+        "security": [
+          {
+            "Clave del servicio": []
+          }
         ]
+      }
+    },
+    "/api/requests/{request_id}": {
+      "get": {
+        "tags": [
+          "Estado durable"
+        ],
+        "summary": "Consultar solicitud y operaciones",
+        "operationId": "request_state_api_requests__request_id__get",
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -238,12 +308,50 @@
       },
       "EmailChatRequest": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
           "message": {
             "type": "string",
             "maxLength": 4000,
             "minLength": 1,
             "title": "Mensaje",
-            "description": "Converse normalmente o solicite redactar y enviar a un destinatario expl\u00edcito. Una orden expl\u00edcita de env\u00edo con datos suficientes env\u00eda en ese mismo turno. Una solicitud de borrador solo prepara una vista previa.",
+            "description": "Converse normalmente o solicite redactar y enviar a un destinatario expl\u00edcito. Una orden expl\u00edcita de env\u00edo con datos suficientes env\u00eda en ese mismo turno. Una solicitud de redacci\u00f3n devuelve asunto y texto sin exigir destinatario, aprobaci\u00f3n ni env\u00edo.",
             "examples": [
               "Env\u00eda a persona@example.com un recordatorio de la reuni\u00f3n de ma\u00f1ana."
             ]
@@ -283,8 +391,38 @@
         ],
         "title": "Mensaje al agente de correo"
       },
+      "EmailContent": {
+        "properties": {
+          "subject": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]+$",
+            "title": "Asunto exacto"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 12000,
+            "minLength": 1,
+            "title": "Texto exacto"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "subject",
+          "text"
+        ],
+        "title": "EmailContent"
+      },
       "EmailPreview": {
         "properties": {
+          "plan_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Versi\u00f3n aprobada",
+            "default": 1
+          },
           "draft_id": {
             "type": "string",
             "title": "Identificador del borrador"
@@ -357,6 +495,44 @@
       },
       "EmailRequest": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
           "action": {
             "type": "string",
             "enum": [
@@ -409,6 +585,18 @@
               }
             ],
             "title": "Itinerario"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailContent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contenido exacto opcional",
+            "description": "Prepara una vista previa del contenido proporcionado; nunca autoriza por s\u00ed solo el env\u00edo."
           },
           "preview": {
             "anyOf": [
@@ -473,6 +661,88 @@
       },
       "EmailResponse": {
         "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesi\u00f3n de la solicitud"
+          },
+          "workflow_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado durable"
+          },
+          "a2a_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarea A2A remota"
+          },
+          "a2a_context_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto A2A remoto"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -482,7 +752,8 @@
               "delivery_unknown",
               "error",
               "clarification",
-              "completed"
+              "completed",
+              "cancelled"
             ],
             "title": "Estado",
             "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n."
@@ -490,6 +761,18 @@
           "message": {
             "type": "string",
             "title": "Mensaje"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailContent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redacci\u00f3n sin env\u00edo",
+            "description": "Asunto y texto redactados, sin aprobaci\u00f3n ni autorizaci\u00f3n de env\u00edo."
           },
           "preview": {
             "anyOf": [
@@ -555,7 +838,8 @@
                   "awaiting_confirmation",
                   "sent",
                   "failed",
-                  "completed"
+                  "completed",
+                  "cancelled"
                 ]
               },
               {
@@ -1230,6 +1514,14 @@
             ]
           }
         }
+      }
+    },
+    "securitySchemes": {
+      "Clave del servicio": {
+        "type": "apiKey",
+        "description": "Clave privada de esta API. No es una autorizaci\u00f3n de env\u00edo ni una identidad personal.",
+        "in": "header",
+        "name": "X-API-Key"
       }
     }
   }

@@ -1,0 +1,1309 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agente independiente de agenda",
+    "description": "Organiza actividades y consulta Google Calendar de la cuenta de clases. Crear eventos exige revisar una propuesta exacta y confirmarla. No env\u00eda invitaciones; correo es una delegaci\u00f3n opcional.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Estado"
+        ],
+        "summary": "Consultar el estado del agente",
+        "description": "Comprueba que la API responde. No consulta modelos ni proveedores externos.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Estado del agente",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "Agenda"
+        ],
+        "summary": "Conversar, consultar o proponer una agenda",
+        "operationId": "chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgendaRequest"
+              },
+              "examples": {
+                "sesiones": {
+                  "summary": "Proponer sesiones con datos expl\u00edcitos",
+                  "value": {
+                    "message": "Organiza repaso y pr\u00e1ctica el 2030-05-06 desde las 10:00 en America/Bogota, 60 minutos cada sesi\u00f3n."
+                  }
+                },
+                "confirmar": {
+                  "summary": "Confirmar la propuesta vigente",
+                  "value": {
+                    "message": "S\u00ed, ag\u00e9ndalo",
+                    "context": "CONTEXTO_REAL_DEVUELTO",
+                    "session_id": "classroom"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgendaResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ]
+      }
+    },
+    "/.well-known/agent-card.json": {
+      "get": {
+        "tags": [
+          "A2A: Agent Card"
+        ],
+        "summary": " Get Agent Card",
+        "description": "Returns the public AgentCard describing this agent's capabilities, supported transports, and skills.",
+        "operationId": "_get_agent_card__well_known_agent_card_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/a2a": {
+      "post": {
+        "tags": [
+          "A2A: JSON-RPC"
+        ],
+        "summary": "A2A JSON-RPC endpoint",
+        "description": "A2A JSON-RPC 2.0 endpoint. The `method` field selects the operation;\n`params` must match that method's schema (see the `oneOf` below).\n\n**Supported methods:**\n\n- `SendMessage` \u2014 Send a message to the agent (returns a Task or response Message).\n- `SendStreamingMessage` \u2014 Send a message and receive a Server-Sent Events stream.\n- `GetTask` \u2014 Fetch a task by ID.\n- `ListTasks` \u2014 List tasks with pagination and filtering.\n- `CancelTask` \u2014 Cancel an in-progress task.\n- `CreateTaskPushNotificationConfig` \u2014 Register a push-notification config on a task.\n- `GetTaskPushNotificationConfig` \u2014 Read a single push-notification config.\n- `ListTaskPushNotificationConfigs` \u2014 List all push-notification configs for a task.\n- `DeleteTaskPushNotificationConfig` \u2014 Delete a push-notification config.\n- `SubscribeToTask` \u2014 Subscribe to task events via Server-Sent Events.\n- `GetExtendedAgentCard` \u2014 Fetch the authenticated extended agent card.\n",
+        "operationId": "handle_requests_a2a_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "description": "A2A JSON-RPC 2.0 request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/A2ARequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "A2A-Version",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1.0"
+              ]
+            },
+            "example": "1.0"
+          }
+        ],
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ]
+      }
+    },
+    "/api/requests/{request_id}": {
+      "get": {
+        "tags": [
+          "Estado durable"
+        ],
+        "summary": "Consultar solicitud y operaciones",
+        "operationId": "request_state_api_requests__request_id__get",
+        "security": [
+          {
+            "Clave del servicio": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgendaEvent": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "start",
+          "end",
+          "timezone"
+        ],
+        "title": "AgendaEvent"
+      },
+      "AgendaPreview": {
+        "properties": {
+          "plan_id": {
+            "type": "string",
+            "title": "Plan Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "calendar_id": {
+            "type": "string",
+            "const": "primary",
+            "title": "Calendar Id",
+            "default": "primary"
+          },
+          "account": {
+            "type": "string",
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Account"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/AgendaEvent"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Events"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient"
+          },
+          "mail_requested": {
+            "type": "boolean",
+            "title": "Mail Requested",
+            "default": false
+          },
+          "expires_at": {
+            "type": "integer",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "plan_id",
+          "session_id",
+          "events",
+          "expires_at"
+        ],
+        "title": "AgendaPreview"
+      },
+      "AgendaRequest": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Mensaje",
+            "default": ""
+          },
+          "session_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Sesi\u00f3n",
+            "default": "classroom"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto opaco"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgendaSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferencias estructuradas opcionales"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destinatario del resumen solicitado"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AgendaRequest"
+      },
+      "AgendaResponse": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solicitud durable"
+          },
+          "plan_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versi\u00f3n del plan"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operaci\u00f3n idempotente"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sesi\u00f3n de la solicitud"
+          },
+          "workflow_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado durable"
+          },
+          "a2a_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarea A2A remota"
+          },
+          "a2a_context_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contexto A2A remoto"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "clarification",
+              "preview",
+              "created",
+              "conflict",
+              "creation_unknown",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgendaPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingAgendaPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/CreatedEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "missing_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Field"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "AgendaResponse"
+      },
+      "AgendaSpec": {
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha inicial"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zona horaria IANA"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{2}:\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora local inicial"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSpec"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Actividades"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AgendaSpec"
+      },
+      "CreatedEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "link": {
+            "type": "string",
+            "title": "Link"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "start",
+          "end",
+          "link"
+        ],
+        "title": "CreatedEvent"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PendingAgendaPlan": {
+        "properties": {
+          "spec": {
+            "$ref": "#/components/schemas/AgendaSpec"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient"
+          },
+          "mail_requested": {
+            "type": "boolean",
+            "title": "Mail Requested",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "spec"
+        ],
+        "title": "PendingAgendaPlan"
+      },
+      "SessionSpec": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Actividad"
+          },
+          "duration_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duraci\u00f3n en minutos"
+          },
+          "day_offset": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "D\u00edas desde la fecha inicial",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SessionSpec"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "configuration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SendMessageConfiguration"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": null
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "example": "message_id"
+          },
+          "context_id": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": ""
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ROLE_UNSPECIFIED",
+              "ROLE_USER",
+              "ROLE_AGENT"
+            ],
+            "example": "ROLE_USER"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            },
+            "example": [
+              {
+                "text": ""
+              }
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": ""
+            },
+            "example": [
+              ""
+            ]
+          },
+          "reference_task_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": ""
+            },
+            "example": [
+              ""
+            ]
+          }
+        }
+      },
+      "Part": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "type": "object"
+              },
+              "filename": {
+                "type": "string",
+                "example": ""
+              },
+              "media_type": {
+                "type": "string",
+                "example": ""
+              }
+            }
+          },
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "raw": {
+                    "type": "string",
+                    "format": "byte"
+                  }
+                },
+                "required": [
+                  "raw"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "data": {}
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            ]
+          }
+        ],
+        "example": {
+          "text": ""
+        }
+      },
+      "SendMessageConfiguration": {
+        "type": "object",
+        "properties": {
+          "accepted_output_modes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "example": ""
+            },
+            "example": [
+              ""
+            ]
+          },
+          "task_push_notification_config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskPushNotificationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": null
+          },
+          "history_length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "return_immediately": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "TaskPushNotificationConfig": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": ""
+          },
+          "url": {
+            "type": "string",
+            "example": "url"
+          },
+          "token": {
+            "type": "string",
+            "example": ""
+          },
+          "authentication": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AuthenticationInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": null
+          }
+        }
+      },
+      "AuthenticationInfo": {
+        "type": "object",
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "example": "scheme"
+          },
+          "credentials": {
+            "type": "string",
+            "example": ""
+          }
+        }
+      },
+      "GetTaskRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          },
+          "history_length": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ListTasksRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "context_id": {
+            "type": "string",
+            "example": ""
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "TASK_STATE_UNSPECIFIED",
+              "TASK_STATE_SUBMITTED",
+              "TASK_STATE_WORKING",
+              "TASK_STATE_COMPLETED",
+              "TASK_STATE_FAILED",
+              "TASK_STATE_CANCELED",
+              "TASK_STATE_INPUT_REQUIRED",
+              "TASK_STATE_REJECTED",
+              "TASK_STATE_AUTH_REQUIRED"
+            ],
+            "example": "TASK_STATE_SUBMITTED"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_token": {
+            "type": "string",
+            "example": ""
+          },
+          "history_length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status_timestamp_after": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "include_artifacts": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CancelTaskRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "GetTaskPushNotificationConfigRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": "task_id"
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          }
+        }
+      },
+      "ListTaskPushNotificationConfigsRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": "task_id"
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "page_token": {
+            "type": "string",
+            "example": ""
+          }
+        }
+      },
+      "DeleteTaskPushNotificationConfigRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "task_id": {
+            "type": "string",
+            "example": "task_id"
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          }
+        }
+      },
+      "SubscribeToTaskRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          },
+          "id": {
+            "type": "string",
+            "example": "id"
+          }
+        }
+      },
+      "GetExtendedAgentCardRequest": {
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "type": "string",
+            "example": ""
+          }
+        }
+      },
+      "A2ARequest": {
+        "type": "object",
+        "required": [
+          "jsonrpc",
+          "method"
+        ],
+        "properties": {
+          "jsonrpc": {
+            "type": "string",
+            "enum": [
+              "2.0"
+            ]
+          },
+          "id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "SendMessage",
+              "SendStreamingMessage",
+              "GetTask",
+              "ListTasks",
+              "CancelTask",
+              "CreateTaskPushNotificationConfig",
+              "GetTaskPushNotificationConfig",
+              "ListTaskPushNotificationConfigs",
+              "DeleteTaskPushNotificationConfig",
+              "SubscribeToTask",
+              "GetExtendedAgentCard"
+            ]
+          },
+          "params": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              },
+              {
+                "$ref": "#/components/schemas/GetTaskRequest"
+              },
+              {
+                "$ref": "#/components/schemas/ListTasksRequest"
+              },
+              {
+                "$ref": "#/components/schemas/CancelTaskRequest"
+              },
+              {
+                "$ref": "#/components/schemas/TaskPushNotificationConfig"
+              },
+              {
+                "$ref": "#/components/schemas/GetTaskPushNotificationConfigRequest"
+              },
+              {
+                "$ref": "#/components/schemas/ListTaskPushNotificationConfigsRequest"
+              },
+              {
+                "$ref": "#/components/schemas/DeleteTaskPushNotificationConfigRequest"
+              },
+              {
+                "$ref": "#/components/schemas/SubscribeToTaskRequest"
+              },
+              {
+                "$ref": "#/components/schemas/GetExtendedAgentCardRequest"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "Clave del servicio": {
+        "type": "apiKey",
+        "description": "Clave privada de esta API. No es una autorizaci\u00f3n de env\u00edo ni una identidad personal.",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}

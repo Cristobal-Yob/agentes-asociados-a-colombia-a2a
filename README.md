@@ -1,115 +1,174 @@
-# Agentes asociados a Colombia A2A
+# Agents associated with Colombia A2A
 
-El agente de correo conversa normalmente y redacta o envía desde **student@example.com** a cualquier destinatario válido indicado por usted. Una orden explícita como «Redacta un recordatorio de la reunión de mañana y envíalo a persona@example.com» compone y envía en ese mismo turno. «Redacta un borrador para persona@example.com» devuelve una vista previa sin enviar. El agente funciona por separado y también mediante A2A con itinerarios.
+A classroom reference for students learning to build two independent Python agents: **Itinerary** plans a visit,
+and **Email** drafts messages or executes an explicitly requested send. Each owns
+its FastAPI interface, LangGraph workflow, service key and durable business state.
+Itinerary can use Email through the official A2A SDK; neither needs a central
+orchestrator. The same repository includes an optional Agenda agent and a local
+standalone web UI prototype.
 
-**Estado:** el código y las pruebas herméticas están preparados para la cuenta personal. Esa cuenta necesita su propio consentimiento OAuth; la autorización anterior de `learner@example.com` no sirve ni se reutiliza. No se ha enviado correo real desde la cuenta personal ni se ha acreditado llegada al buzón. No se iniciaron servicios con este cambio; el perfil personal debe iniciarse después de autorizar la cuenta. Cloud Run sigue pendiente.
+**Educational source prepared for publication in this repository.** Source
+visibility does not grant access to hosted agents or authorize provider usage.
+The owner has not selected an open-source license; there is no root `LICENSE`.
+This repository demonstrates implementation, not a hosted service entitlement or
+a claim that the local UI and every optional integration are production-validated.
+See the [release and privacy notes](docs/public-release.md) and
+[public privacy summary](docs/source-privacy.json).
 
-Los textos propios están en español; identificadores, contratos, citas y diagnósticos de proveedores conservan su idioma original. El modelo real predeterminado es Vertex en `example-project`, ubicación `global`, modelo `gemini-3.1-flash-lite`. Los errores de credenciales o proveedor nunca activan simulación automáticamente.
+## Student learning path
 
-## Correo local desde Windows
+Start with deterministic tests and inspect one boundary at a time. This source
+preparation does not grant students access to deployed agents. Do not distribute
+institutional credentials, instructor API keys, OAuth grants or shared production
+sessions. Students run the offline exercises locally; any later live exercise
+requires their own separately approved accounts and configuration.
 
-Autorice una vez su Gmail personal con el [asistente OAuth](docs/gmail-authorization.md). Después, desde este directorio:
+| Stage | Inspect / exercise | What to explain before moving on |
+|---|---|---|
+| 1. Independent agents | [Itinerary service](tourism_agent/service.py), [Email service](email_agent/service.py); run `tests/test_tourism.py` and `tests/test_email_intent.py` | Each agent accepts its own input and returns a result without requiring the other to be running |
+| 2. LangGraph and LLM decisions | [Architecture node map](docs/architecture.md#native-itinerary-which-nodes-use-an-llm), [small LangGraph examples](examples/README.md); run `tests/test_tourism_conversation.py` | Distinguish a model decision from Python validation/execution; scripted tests are not a live LLM |
+| 3. AgentCard and A2A | [SDK adapter](common/a2a_transport.py); run `tests/test_protocol.py` | The card describes skills/contact/auth; typed `SendMessage` delegates work and returns a task artifact |
+| 4. MCP tool discovery | [Read-only catalog adapter](tourism_agent/mcp_catalog.py); run `tests/test_mcp.py` | MCP `list_tools` exposes tool schemas, not agent cards; offline tests do not contact the public catalog |
+| 5. Sessions and operation IDs | [Durable workflow guide](docs/durable-workflows.md); run `tests/test_workflows.py` | Preserve request/session/version and receipts; distinguish business IDs from A2A task IDs |
+| 6. Itinerary plus email draft | [Typed draft example](examples/email.json); run `tests/test_workflow_integration.py` and `tests/test_demo_ui.py` | Generate a plan, delegate a draft and inspect the result without sending mail |
+| 7. Explicit send boundary | [Consent checks](tests/test_consent.py), [Email graph tests](tests/test_email_chat_graph.py) | Simulate an approved send first; a real send needs a current explicit request and independently authorized own account/configuration |
 
-```powershell
-.\scripts\start_local.ps1
-```
+For every stage, draw the input, decision/tool, output and saved evidence. Keep
+`ENABLE_REAL_EMAIL=false` and mock transport throughout offline work. Do not use
+an instructor's real mailbox to verify an exercise. The optional Agenda and local
+UI prototype are extensions, not prerequisites for understanding the two agents.
 
-En otra terminal, o si el agente personal ya está activo:
+## Source map
 
-```powershell
-.\scripts\mail.ps1
-```
-
-El cliente conserva `context` automáticamente. Puede conversar, pedir un borrador o dar una orden explícita de redactar y enviar. Si falta destinatario o contenido, pregunta un dato por turno. `cancelar` termina. Pedir un borrador exige revisar la vista previa y responder «Sí, envíalo»; una orden de envío suficiente no exige otro turno. El resultado incluye el mensaje compuesto y la aceptación de Gmail cuando se confirma. Aceptación no significa llegada al buzón.
-
-El inicio usa el intérprete existente, `work/gmail-oauth-personal/authorized-user.json`, la clave existente `work/gmail-oauth/approval-key.txt` y el registro durable `work/gmail-dispatch.sqlite`. Comprueba permisos y puerto 8002, ejecuta en primer plano y no modifica el entorno del llamador. No instala, genera claves ni utiliza el grant anterior. Si falta la autorización personal, falla con un diagnóstico. Un puerto ocupado se rechaza sin detener procesos; el operador debe verificar qué versión está activa antes de usarla.
-
-El cliente envía JSON UTF-8 solo a una URL local y nunca carga credenciales. No reintenta resultados inciertos. La continuación firmada de una orden pendiente se consume una vez mediante reserva durable antes de componer; repetirla no vuelve a generar ni enviar. Los mensajes iniciales sin contexto son solicitudes independientes: repetirlos manualmente puede crear otro correo. No hay deduplicación global por texto ni una medición nueva de rapidez.
-
-## Iniciar el agente real de itinerarios
-
-Requiere Python **3.12 o 3.13**, [uv](https://docs.astral.sh/uv/) y ADC autorizadas para `example-project`. La prueba histórica usó ADC de clase ya existentes. No se carga `.env` automáticamente, no se usan claves de API de Google y la aplicación no cambia la cuenta o el proyecto activo de gcloud. Los siguientes comandos son instrucciones para ejecución humana posterior; esta traducción no los ejecutó.
-
-```powershell
-# Windows PowerShell: prepare una vez y ejecute desde este directorio
-uv sync --frozen --python 3.12
-$env:MODEL_MODE='vertex'; $env:VERTEX_PROJECT_ID='example-project'
-$env:VERTEX_LOCATION='global'; $env:MODEL_ID='gemini-3.1-flash-lite'
-$env:PUBLIC_AGENT_URL='http://127.0.0.1:8001'
-$env:EMAIL_AGENT_URL='http://127.0.0.1:8002'
-$env:ENABLE_MCP='false'; $env:PEER_USE_IAM='false'
-.\.venv\Scripts\python.exe -m tourism_agent
-```
-
-En Bash:
-
-```bash
-uv sync --frozen --python 3.12
-MODEL_MODE=vertex VERTEX_PROJECT_ID=example-project VERTEX_LOCATION=global MODEL_ID=gemini-3.1-flash-lite PUBLIC_AGENT_URL=http://127.0.0.1:8001 EMAIL_AGENT_URL=http://127.0.0.1:8002 ENABLE_MCP=false PEER_USE_IAM=false .venv/bin/python -m tourism_agent
-```
-
-Después de iniciarlo, abra [Swagger de itinerarios](http://127.0.0.1:8001/docs). Ctrl+C detiene el proceso en primer plano. Una solicitud completa usa una llamada pagada y acotada al modelo; saludos y aclaraciones no consultan catálogo ni modelo. El modelo selecciona identificadores suministrados; la aplicación comprueba su pertenencia y construye los hechos. El catálogo curado no reemplaza al modelo real.
-
-Si faltan ADC, obtenga credenciales autorizadas para este proyecto. La aplicación fija el proyecto de Vertex y el de cuota y rechaza otro modelo, proyecto o ubicación. Las credenciales de conectores del navegador no se exportan a estos servicios.
-
-## Autorizar e integrar Gmail personal
-
-El remitente Gmail está fijado a **student@example.com**. Cambiar el texto de la solicitud o `EMAIL_SENDER` no permite usar otra identidad. El grant debe pertenecer a esa cuenta y al cliente de escritorio de `example-project`; cada envío renueva OAuth y verifica email confirmado y `sub`. Los permisos siguen siendo únicamente `gmail.send`, `email` y `openid`. La cuenta de Vertex puede ser diferente. Siga la [guía de autorización](docs/gmail-authorization.md); no copie credenciales a este proyecto ni imprima secretos.
-
-Ambas APIs aceptan `message`; cuando reciben `context`, devuélvalo intacto en el siguiente turno. No hacen falta flags ni consultar al otro agente para integrar correo:
-
-```json
-{"message":"Hola, ¿qué puedes hacer?"}
-```
-
-```json
-{"message":"Redacta un recordatorio de la reunión de mañana y envíalo a persona@example.com"}
-```
-
-`persona@example.com` es solo un ejemplo; use el destinatario real solicitado. Si quiere revisar antes de enviar:
-
-```json
-{"message":"Redacta un borrador de recordatorio para persona@example.com"}
-```
-
-En ese caso revise `preview` y luego envíe `{"message":"Sí, envíalo","context":"CONTEXTO_REAL_DEVUELTO"}`. Una negación, una cita, una instrucción de fuente o una sugerencia del modelo nunca autorizan envío. Las continuaciones de correo están firmadas, ligadas a sesión/configuración y vencen a los 300 segundos. No están cifradas: no las publique. Una cancelación invalida la intención de ese turno sin contactar a Google.
-
-Itinerarios conserva su planificación en el puerto 8001 y decide el handoff A2A dentro de esa llamada. Una petición completa como `{"message":"Bogotá, 2 días, cultura; envíalo a persona@example.com"}` delega redactar y enviar. Pedir solo preparar por correo conserva la vista previa y posterior confirmación. Si la orden inicial de turismo necesitó aclaraciones antes de planificar, la delegación conserva la revisión del borrador; indique «Sí, envíalo» en el siguiente turno. Una visita normal no contacta a correo. No hay servicios de Colombia obligatorios para hablar con el agente de correo.
-
-`/api/email` sigue compatible: `action=draft` devuelve vista previa firmada; `action=send` exige `confirmed=true`, la misma sesión, token y preview sin modificar y vigente. A2A usa JSON tipado del SDK. No se aceptan entradas `TextPart` sin contrato. [examples/email.json](examples/email.json) y [examples/tourism.json](examples/tourism.json) siguen siendo ejemplos de borradores.
-
-`sent` con `delivery=provider_accepted` acredita aceptación registrada por Gmail; `delivery_unknown` informa incertidumbre sin reintentar. El ledger impide un segundo intento automático del mismo borrador o continuación consumida. Una caída después de reservar puede perder un correo todavía no enviado; no se garantiza entrega exactamente una vez. No borre el ledger con aprobaciones vigentes. Cloud Run exige un registro GCS compartido y autorización separada; no usa SQLite efímero.
-
-## Consulta opcional del catálogo en vivo
-
-`ENABLE_MCP=true` habilita API Colombia MCP público cuando la solicitud completa requiere catálogo. Saludos y aclaraciones nunca consultan fuentes. Una prueba corregida obtuvo dos registros de Cartagena; no demuestra disponibilidad continua. El adaptador usa diez segundos y dos herramientas como máximo, declara resultados vacíos, tiempo agotado o indisponibilidad, y puede conservar hechos curados con fechas fijas. Ese respaldo de catálogo no sustituye un modelo en vivo que falla. El contenido de fuentes no autoriza envíos.
-
-Precios, horarios, disponibilidad, accesibilidad, transporte y seguridad siguen sin verificarse. Los planes largos pueden repetir actividades; no se hacen reservas.
-
-## Interfaces y evidencia
-
-| Uso | Ubicación |
+| Want to inspect | Read or run |
 |---|---|
-| Dos grafos LangGraph y secuencia A2A | [Arquitectura](docs/architecture.md) |
-| Contratos de entrada y salida | [Modelos Pydantic](common/contracts.py), [esquemas JSON](docs/contracts/) |
-| Descubrimiento y transporte | `/.well-known/agent-card.json` / `/a2a`, A2A 1.0 oficial |
-| CI automático y CD manual de las dos APIs | [Guía de GitHub y Cloud Run](docs/ci-cd.md) |
+| Responsibilities, LLM decisions and inputs/outputs | [Architecture](docs/architecture.md) |
+| Offline behavior with no model, mail or cloud credentials | Quick path below |
+| Small LangGraph client using either agent | [Mini-agent examples](examples/README.md) |
+| Durable sessions, IDs and safe recovery | [Workflow guide](docs/durable-workflows.md) |
+| Separate UI and its trust boundary | [UI prototype](demo_ui/README.md) |
+| Disclosure and release limits | [Security policy](SECURITY.md), [public-release checklist](docs/public-release.md) |
 
-CI comprueba Linux y Windows sin credenciales. CD está preparado para actualizar únicamente `email-agent` y `itinerary-agent` existentes en `example-project/us-central1`, por digest y sin promover tráfico. Necesita WIF, servicios, secretos personales y ledger GCS previamente configurados; los faltantes detienen la ejecución antes de construir. Todavía no se ejecutó en GitHub ni se desplegó. La evidencia histórica privada se conserva fuera del payload publicado.
+## Quick path: deterministic and offline
 
-## Perfil de verificación hermético
+Use Python 3.12 or 3.13. Dependency installation is an explicit operator action;
+these commands are instructions, not evidence that a fresh installation was run.
+With `uv` already installed, create the environment from the committed lock:
 
-Las pruebas eligen `Settings.offline()` o `MODEL_MODE=fixture` / `EMAIL_TRANSPORT=mock` explícitamente. Ese perfil determinista sirve para pruebas y ejercicios sin conexión; no es el valor predeterminado de clase. El harness elimina credenciales heredadas, desactiva proveedores pagados, MCP e IAM, inicia dos procesos propios en puertos locales disponibles y limpia solo esos procesos. Su ejecución es efímera y no deja las APIs reales activas.
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m ruff format --check .
-# Prueba explícita sin conexión y gratuita; nunca envía correo real:
-.\.venv\Scripts\python.exe -m scripts.smoke --samples 20 --report ../../work/latency.json
-docker compose config --quiet
+```sh
+uv sync --frozen --all-groups --no-install-project
+uv run --frozen --no-sync python -B -m pytest tests/test_tourism.py tests/test_email_intent.py tests/test_workflows.py tests/test_agent_auth.py tests/test_public_readiness.py -q
 ```
 
-En otros sistemas sustituya `.\.venv\Scripts\python.exe` por `.venv/bin/python`. Los registros temporales van a `work/colombia-runtime`, configurable mediante `COLOMBIA_WORK_DIR`. Ninguna prueba lee `.env` ni llama a un modelo pagado. La latencia histórica del perfil sin conexión no mide Vertex real. Los comandos de instalación, smoke adicional o Docker mostrados aquí no se volvieron a ejecutar durante la traducción.
+Tests explicitly use fixture models, fake providers and temporary stores. They do
+not prove a live LLM, OAuth login, Calendar creation or delivery of an email.
+For natural-language flow examples with a scripted test model:
 
-Compose define exactamente dos contenedores con perfil real. Con Docker disponible, monte explícitamente un archivo ADC autorizado y de solo lectura mediante una configuración local, en la ruta de `GOOGLE_APPLICATION_CREDENTIALS`; nunca se copia ADC del host a la imagen. Correo monta sus credenciales Gmail protegidas como solo lectura, recibe la clave desde el entorno y guarda SQLite en `work/gmail-runtime`. La configuración faltante detiene el inicio. Turismo no depende de correo. No se construyeron ni ejecutaron imágenes aquí. En Cloud Run se usarían ADC de cada cuenta de servicio. La tarjeta de correo del contenedor anuncia `http://email:8080`; en ese perfil use REST/Swagger del host para acceso directo.
+```sh
+uv run --frozen --no-sync python -B -m pytest tests/test_tourism_conversation.py tests/test_email_chat_graph.py tests/test_demo_ui.py tests/test_demo_ui_release.py -q
+```
+
+No environment file is needed for tests. Python entry points do **not** load `.env`
+automatically. Unconfigured runtime and container defaults are also offline. The reference [.env.example](.env.example) and Compose now select
+`MODEL_MODE=fixture`, `EMAIL_TRANSPORT=mock`, `ENABLE_REAL_EMAIL=false` and no MCP.
+Compose binds only loopback ports and mounts no personal grants. It still requires
+your own distinct service keys; empty keys fail closed. The legacy Windows launchers require a separate explicit live opt-in and own
+configuration; they are not the offline quickstart.
+
+The deterministic profile supports typed requests, not an imitation natural-language
+router. An offline trip uses [examples/tourism.json](examples/tourism.json):
+
+```json
+{
+  "message": "",
+  "context": {"city": "Bogot\u00e1", "days": 2, "interests": ["culture"]},
+  "draft_email": false,
+  "session_id": "lesson-1"
+}
+```
+
+## What the code actually implements
+
+| Capability | Source status and limit |
+|---|---|
+| Itinerary and Email | Independent FastAPI services, real LangGraph workflows and typed contracts |
+| Native conversation | Live LLM chooses text/tool or chat/draft/send/cancel; tests inject explicit model decisions |
+| A2A | AgentCard discovery and official JSONRPC `SendMessage`, typed JSON input and task artifacts |
+| Catalog | Curated records for Bogota, Medellin and Cartagena; optional bounded read-only MCP retrieval |
+| Memory | SQLite per service, or explicit dedicated Firestore; bounded conversation history, versions and receipts |
+| Email | Draft-only or explicit send; Gmail/optional Resend adapters, signed payloads and effect ledgers |
+| Agenda | Optional third API and Calendar adapter; separate credentials and explicit event confirmation |
+| Own UI | Local structured Itinerary/Email prototype, Google Web OAuth and owner-bound server session |
+| Delivery automation | Separate agent and UI CI/CD sources; production readiness and live OAuth acceptance are not implied |
+
+Catalog fixtures are not current travel research. Availability, prices, opening
+hours, transport, safety and reservations are not verified. A long trip may repeat
+activities. No output is a booking.
+
+## API contract
+
+| Interface | Itinerary | Email | Optional Agenda |
+|---|---|---|---|
+| Conversation / typed trip | `POST /api/chat` | `POST /api/chat` | `POST /api/chat` |
+| Typed email action | Not provided | `POST /api/email` | Not provided |
+| A2A | `POST /a2a` | `POST /a2a` | `POST /a2a` |
+| Discovery | `GET /.well-known/agent-card.json` | Same path | Same path |
+| Durable lookup | `GET /api/requests/{request_id}?session_id=...` | Same path | Same path |
+
+Business routes require that service's `X-API-Key`. Cards, health and Swagger are
+metadata, **not** a user login or proof of a private cloud service. A service key is
+not a student's identity. There is no `/api/itinerary` endpoint. A2A and the REST
+handlers call the same core; a LangChain tool is an adapter that can invoke A2A,
+not a different protocol.
+
+Keep the returned `request_id`, `session_id`, `plan_version` and operation receipt.
+Do not create a new request to resolve an uncertain send. Query the original durable
+record. A2A task/context IDs are separate and its native task cache is ephemeral.
+
+## Drafting and sending are different
+
+- Natural chat can request a free-topic draft without a recipient. It returns
+  content, not a permission to send. A sufficient **current human** send request
+  can send in the same turn; another mandatory "OK" is not required.
+- Typed `POST /api/email` with `action=draft` prepares a signed preview and requires
+  a recipient. `action=send` requires the exact preview, token, session/version
+  and `confirmed=true`; it is not enabled by a model-generated flag.
+- The UI uses typed draft/no-send contracts and a separate **Enviar este correo**
+  button. It does not pass arbitrary browser messages into the native send-capable
+  chat endpoint. Its Google login has not been validated live or deployed.
+- Reservations precede side effects. The final Itinerary LLM receives evidence
+  with tools disabled; it cannot invoke Email again. Unknown outcomes stay locked,
+  rather than being retried automatically. This is not exactly-once delivery.
+- `sent` plus `delivery=provider_accepted` means recorded provider acceptance,
+  not delivery to the inbox or reading. `simulated_only` is only an offline result.
+
+## Live adapters are an explicit, separate setup
+
+Live adapters require **your own explicit configuration**, never the instructor's
+account or keys. Defaults select `MODEL_MODE=fixture`, `EMAIL_TRANSPORT=mock` and
+`ENABLE_REAL_EMAIL=false`. `MODEL_MODE=vertex` additionally requires an explicit
+`VERTEX_PROJECT_ID`; the model validates that project before discovering ADC and
+uses the same project for quota. A provider failure does not fall back to fixtures.
+
+For Gmail, set `GMAIL_EXPECTED_EMAIL` and `GMAIL_OAUTH_PROJECT` **before starting
+Python**, then authorize that exact account/project using your own Desktop client.
+Set `EMAIL_TRANSPORT=gmail`, `EMAIL_SENDER` to that mailbox, a private grant path,
+a strong persistent approval key, a private effect ledger and
+`ENABLE_REAL_EMAIL=true` only for a separately authorized live exercise. Gmail
+still verifies the selected email, verified subject, OAuth scopes and signed
+payload; configuration is not permission to send. Example addresses are reserved
+and cannot serve as an authorized live mailbox. Calendar needs a separate grant.
+
+The optional UI additionally requires its own Web OAuth client, allowed Google
+email, explicit agent origins, expected sender, fixed hub return and dedicated
+Firestore configuration. All are server-side; missing settings fail closed. No
+hosted agent origin or instructor allowlist is shipped. The hub is only entry and
+return navigation, without shared cookies, tokens or a proxy.
+
+Follow [Gmail](docs/gmail-authorization.md), [Calendar](docs/calendar-authorization.md),
+[durable stores](docs/durable-workflows.md) and [CI/CD](docs/ci-cd.md) only after
+separately approving live scope. Never copy keys, ADC or grants into source,
+browser JavaScript, URLs, screenshots or issue reports. CD remains manual and
+requires `PUBLIC_SOURCE_DEPLOY_ENABLED=true` in a protected operator environment;
+a push or pull request cannot obtain cloud tokens or deploy. This publication
+changes no deployed agent, key, IAM, OAuth client or cloud configuration.

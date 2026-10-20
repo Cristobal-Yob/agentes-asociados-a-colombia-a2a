@@ -1,8 +1,49 @@
 {
   "additionalProperties": false,
   "properties": {
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solicitud durable"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Versi\u00f3n del plan"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operaci\u00f3n idempotente"
+    },
     "message": {
-      "description": "Converse normalmente o solicite redactar y enviar a un destinatario expl\u00edcito. Una orden expl\u00edcita de env\u00edo con datos suficientes env\u00eda en ese mismo turno. Una solicitud de borrador solo prepara una vista previa.",
+      "description": "Converse normalmente o solicite redactar y enviar a un destinatario expl\u00edcito. Una orden expl\u00edcita de env\u00edo con datos suficientes env\u00eda en ese mismo turno. Una solicitud de redacci\u00f3n devuelve asunto y texto sin exigir destinatario, aprobaci\u00f3n ni env\u00edo.",
       "examples": [
         "Env\u00eda a persona@example.com un recordatorio de la reuni\u00f3n de ma\u00f1ana."
       ],

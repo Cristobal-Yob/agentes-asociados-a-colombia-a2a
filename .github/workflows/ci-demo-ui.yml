@@ -1,0 +1,43 @@
+name: Check standalone Colombia UI
+
+on:
+  pull_request:
+    paths: ['demo_ui/**', 'tests/test_demo_ui*.py', '.github/workflows/*demo-ui.yml']
+  push:
+    branches: [main]
+    paths: ['demo_ui/**', 'tests/test_demo_ui*.py', '.github/workflows/*demo-ui.yml']
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  hermetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.12.13'
+          python-version: '3.12'
+          enable-cache: false
+      - name: Install only the standalone UI dependency pins
+        run: |
+          uv venv --python 3.12 .venv-ui
+          uv pip install --python .venv-ui/bin/python --no-deps -r demo_ui/requirements.txt -r demo_ui/requirements-test.txt
+          uv pip check --python .venv-ui/bin/python
+      - name: Check Python and browser syntax
+        run: |
+          .venv-ui/bin/python -B -m ruff check --isolated --target-version py312 --line-length 100 --select E,F,I,UP,B demo_ui tests/test_demo_ui.py tests/test_demo_ui_release.py
+          .venv-ui/bin/python -B -m ruff format --isolated --target-version py312 --line-length 100 --check demo_ui tests/test_demo_ui.py tests/test_demo_ui_release.py
+          node --check demo_ui/static/app.js
+      - name: Test without Google, Gmail or live agents
+        run: .venv-ui/bin/python -B -m pytest -p pytest_asyncio.plugin -c /dev/null --noconftest --rootdir=. --asyncio-mode=strict tests/test_demo_ui.py tests/test_demo_ui_release.py -q
+      - name: Inspect the allowlisted runtime package
+        run: .venv-ui/bin/python -B -m demo_ui.release stage --destination "$RUNNER_TEMP/colombia-ui-stage"

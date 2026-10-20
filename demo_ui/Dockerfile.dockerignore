@@ -1,0 +1,14 @@
+**
+!demo_ui/
+!demo_ui/__init__.py
+!demo_ui/__main__.py
+!demo_ui/app.py
+!demo_ui/agents.py
+!demo_ui/auth.py
+!demo_ui/config.py
+!demo_ui/store.py
+!demo_ui/requirements.txt
+!demo_ui/static/
+!demo_ui/static/index.html
+!demo_ui/static/app.js
+!demo_ui/static/styles.css

@@ -1,0 +1,16 @@
+{
+  "audience": "students",
+  "purpose": "Public explanation of teaching-source privacy boundaries; not the private replacement map",
+  "examples": "Personal addresses use RFC-reserved example domains; deployed origins are not included",
+  "configuration": "Own project, mailbox, UI owner, service origins and fixed return must be explicitly configured",
+  "safe_defaults": {
+    "model": "fixture",
+    "email": "mock",
+    "real_email": false
+  },
+  "cloud_release": "Manual plus separate PUBLIC_SOURCE_DEPLOY_ENABLED operator opt-in; source pushes do not deploy",
+  "history": "Original repository history is handled separately by the owner and must be checked for residual object access",
+  "deployment": "No running agent configuration, key, access control, IAM or OAuth setting is changed by source sanitization",
+  "license": "No root license has been selected",
+  "public_metadata": "The existing GitHub repository/owner identity remains visible; anonymity is not claimed"
+}

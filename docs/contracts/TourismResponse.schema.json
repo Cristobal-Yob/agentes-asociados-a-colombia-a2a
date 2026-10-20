@@ -1,5 +1,416 @@
 {
   "$defs": {
+    "AgendaEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "start",
+        "end",
+        "timezone"
+      ],
+      "title": "AgendaEvent",
+      "type": "object"
+    },
+    "AgendaPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Id"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation Id"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "calendar_id": {
+          "const": "primary",
+          "default": "primary",
+          "title": "Calendar Id",
+          "type": "string"
+        },
+        "account": {
+          "maxLength": 254,
+          "minLength": 3,
+          "title": "Account",
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/AgendaEvent"
+          },
+          "maxItems": 7,
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        },
+        "recipient": {
+          "anyOf": [
+            {
+              "format": "email",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipient"
+        },
+        "mail_requested": {
+          "default": false,
+          "title": "Mail Requested",
+          "type": "boolean"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan_id",
+        "session_id",
+        "events",
+        "expires_at"
+      ],
+      "title": "AgendaPreview",
+      "type": "object"
+    },
+    "AgendaResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solicitud durable"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versi\u00f3n del plan"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operaci\u00f3n idempotente"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sesi\u00f3n de la solicitud"
+        },
+        "workflow_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estado durable"
+        },
+        "a2a_task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tarea A2A remota"
+        },
+        "a2a_context_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contexto A2A remoto"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "clarification",
+            "preview",
+            "created",
+            "conflict",
+            "creation_unknown",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgendaPreview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pending_plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingAgendaPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/CreatedEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "missing_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Missing Field"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "title": "AgendaResponse",
+      "type": "object"
+    },
+    "AgendaSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fecha inicial"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zona horaria IANA"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{2}:\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hora local inicial"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/SessionSpec"
+          },
+          "maxItems": 7,
+          "title": "Actividades",
+          "type": "array"
+        }
+      },
+      "title": "AgendaSpec",
+      "type": "object"
+    },
+    "CreatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "start": {
+          "format": "date-time",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "format": "date-time",
+          "title": "End",
+          "type": "string"
+        },
+        "link": {
+          "title": "Link",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "start",
+        "end",
+        "link"
+      ],
+      "title": "CreatedEvent",
+      "type": "object"
+    },
     "Day": {
       "additionalProperties": false,
       "properties": {
@@ -30,9 +441,39 @@
       "title": "D\u00eda del itinerario",
       "type": "object"
     },
+    "EmailContent": {
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Asunto exacto",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Texto exacto",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "text"
+      ],
+      "title": "EmailContent",
+      "type": "object"
+    },
     "EmailPreview": {
       "additionalProperties": false,
       "properties": {
+        "plan_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Versi\u00f3n aprobada",
+          "type": "integer"
+        },
         "draft_id": {
           "title": "Identificador del borrador",
           "type": "string"
@@ -105,6 +546,95 @@
     "EmailResponse": {
       "additionalProperties": false,
       "properties": {
+        "request_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solicitud durable"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versi\u00f3n del plan"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operaci\u00f3n idempotente"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sesi\u00f3n de la solicitud"
+        },
+        "workflow_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estado durable"
+        },
+        "a2a_task_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tarea A2A remota"
+        },
+        "a2a_context_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contexto A2A remoto"
+        },
         "status": {
           "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n.",
           "enum": [
@@ -114,7 +644,8 @@
             "delivery_unknown",
             "error",
             "clarification",
-            "completed"
+            "completed",
+            "cancelled"
           ],
           "title": "Estado",
           "type": "string"
@@ -122,6 +653,19 @@
         "message": {
           "title": "Mensaje",
           "type": "string"
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmailContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Asunto y texto redactados, sin aprobaci\u00f3n ni autorizaci\u00f3n de env\u00edo.",
+          "title": "Redacci\u00f3n sin env\u00edo"
         },
         "preview": {
           "anyOf": [
@@ -191,7 +735,8 @@
                 "awaiting_confirmation",
                 "sent",
                 "failed",
-                "completed"
+                "completed",
+                "cancelled"
               ],
               "type": "string"
             },
@@ -259,6 +804,74 @@
         "model_mode"
       ],
       "title": "Itinerario",
+      "type": "object"
+    },
+    "PendingAgendaPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "spec": {
+          "$ref": "#/$defs/AgendaSpec"
+        },
+        "recipient": {
+          "anyOf": [
+            {
+              "format": "email",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipient"
+        },
+        "mail_requested": {
+          "default": false,
+          "title": "Mail Requested",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "spec"
+      ],
+      "title": "PendingAgendaPlan",
+      "type": "object"
+    },
+    "SessionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Actividad",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "anyOf": [
+            {
+              "maximum": 480,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duraci\u00f3n en minutos"
+        },
+        "day_offset": {
+          "default": 0,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "D\u00edas desde la fecha inicial",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "SessionSpec",
       "type": "object"
     },
     "Source": {
@@ -343,6 +956,47 @@
     "TripContext": {
       "additionalProperties": false,
       "properties": {
+        "request_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solicitud durable"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versi\u00f3n del plan"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operaci\u00f3n idempotente"
+        },
         "city": {
           "anyOf": [
             {
@@ -429,6 +1083,24 @@
           "default": null,
           "description": "Contexto opaco del agente de correo. Devuelva context sin interpretarlo.",
           "title": "Continuaci\u00f3n del correo"
+        },
+        "agenda_requested": {
+          "default": false,
+          "title": "Solicitud expl\u00edcita de agenda",
+          "type": "boolean"
+        },
+        "agenda_context": {
+          "anyOf": [
+            {
+              "maxLength": 24000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Continuaci\u00f3n opaca de Agenda"
         }
       },
       "title": "Contexto del viaje",
@@ -437,6 +1109,95 @@
   },
   "additionalProperties": false,
   "properties": {
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solicitud durable"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Versi\u00f3n del plan"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operaci\u00f3n idempotente"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sesi\u00f3n de la solicitud"
+    },
+    "workflow_state": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estado durable"
+    },
+    "a2a_task_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tarea A2A remota"
+    },
+    "a2a_context_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Contexto A2A remoto"
+    },
     "status": {
       "enum": [
         "completed",
@@ -490,6 +1251,18 @@
       "default": null,
       "title": "Respuesta del agente de correo"
     },
+    "agenda": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AgendaResponse"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Respuesta del agente de agenda"
+    },
     "error_code": {
       "anyOf": [
         {
@@ -515,7 +1288,8 @@
             "awaiting_confirmation",
             "sent",
             "failed",
-            "completed"
+            "completed",
+            "cancelled"
           ],
           "type": "string"
         },

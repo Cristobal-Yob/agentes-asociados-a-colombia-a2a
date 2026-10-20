@@ -5,9 +5,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY common ./common
+COPY agenda_agent/__init__.py agenda_agent/contracts.py ./agenda_agent/
 COPY email_agent ./email_agent
-RUN useradd --uid 10001 --create-home agent && chown -R agent:agent /app
+RUN useradd --uid 10001 --create-home agent && mkdir -p /state && chown -R agent:agent /app /state
 USER agent
-ENV HOST=0.0.0.0 PORT=8080 MODEL_MODE=vertex VERTEX_PROJECT_ID=example-project VERTEX_LOCATION=global MODEL_ID=gemini-3.1-flash-lite EMAIL_TRANSPORT=gmail EMAIL_SENDER=student@example.com
+ENV HOST=0.0.0.0 PORT=8080 MODEL_MODE=fixture EMAIL_TRANSPORT=mock ENABLE_REAL_EMAIL=false ENABLE_MCP=false WORKFLOW_DB_PATH=/state/email.sqlite GMAIL_LEDGER_PATH=/state/gmail-dispatch.sqlite
 EXPOSE 8080
 CMD ["/app/.venv/bin/python", "-m", "email_agent"]

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Colombia | Itinerario y correo</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+<!--
+THESIS: A travel workbench separates preparing from dispatching, refusing chat-shaped ambiguity.
+OWN-WORLD: Graphite desk, warm white text, coral actions; ruled rows, native controls, one sans.
+STORY: Sign in, prepare a trip or email, inspect exact content, explicitly send, read the receipt.
+FIRST VIEWPORT: Slim return header, large left-aligned purpose and a three-row process at right;
+authenticated mode places a compact form beside a wider itinerary or mail reading pane.
+FORM: Travel workbench, grounded candidate 3, seed 4149e0f4; brief-pinned graphite/coral.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->
+  <a class="skip" href="#main">Saltar al contenido</a>
+  <header class="topbar">
+    <a class="return" href="https://hub.example.invalid/classroom">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m13 6-6 6 6 6M7 12h13"/></svg>
+      Volver a Agentic
+    </a>
+    <span class="brand">Colombia<span class="brand-detail">Itinerario y correo</span></span>
+    <button id="logout" class="quiet" hidden>Cerrar sesión</button>
+  </header>
+  <main id="main">
+    <section id="access" class="access" aria-labelledby="access-title">
+      <div class="access-intro">
+        <h1 id="access-title">Prepare el viaje.<br>Decida qué enviar.</h1>
+        <p class="lead">Dos agentes, un espacio de trabajo. Cree un itinerario por Colombia o redacte un correo por separado.</p>
+        <a id="login" class="button primary" href="/auth/login" aria-disabled="true">Acceder con Google</a>
+        <p id="access-note" class="muted">Comprobando la configuración de acceso.</p>
+      </div>
+      <div class="process" aria-label="Cómo funciona">
+        <div><span class="step">1</span><div><h2>Prepare</h2><p>Elija el destino y los días, o indique qué desea comunicar.</p></div></div>
+        <div><span class="step">2</span><div><h2>Revise</h2><p>Lea el itinerario y el contenido exacto del borrador.</p></div></div>
+        <div><span class="step">3</span><div><h2>Envíe cuando lo decida</h2><p>No se envía ningún correo al generar un itinerario ni al redactar.</p></div></div>
+      </div>
+    </section>
+    <section id="workspace" hidden aria-label="Espacio de trabajo">
+      <div class="workspace-heading"><div><h1>Su espacio de Colombia</h1><p id="account" class="muted"></p></div><p class="scope-note">Catálogo de clase. No realiza reservas.</p></div>
+      <div class="workbench">
+        <aside class="composer">
+          <nav class="modes" aria-label="Qué desea preparar">
+            <button id="trip-mode" aria-pressed="true">Itinerario</button>
+            <button id="mail-mode" aria-pressed="false">Correo</button>
+          </nav>
+          <form id="trip-form">
+            <h2>Diseñe su visita</h2>
+            <label for="city">Ciudad</label>
+            <select id="city" name="city"><option>Bogotá</option><option>Medellín</option><option>Cartagena</option></select>
+            <label for="days">Duración</label>
+            <select id="days" name="days"><option value="1">1 día</option><option value="2">2 días</option><option value="3" selected>3 días</option><option value="4">4 días</option><option value="5">5 días</option><option value="6">6 días</option><option value="7">7 días</option></select>
+            <fieldset><legend>Intereses</legend><label class="check"><input type="checkbox" name="interest" value="culture" checked>Cultura</label><label class="check"><input type="checkbox" name="interest" value="nature">Naturaleza</label></fieldset>
+            <label class="check prepare"><input id="prepare-email" type="checkbox">Preparar también un correo</label>
+            <div id="trip-recipient-row" hidden><label for="trip-recipient">Destinatario del borrador</label><input id="trip-recipient" type="email" maxlength="254" autocomplete="email" placeholder="persona@example.com"><p class="field-note">El agente de itinerario solicitará un borrador al de correo. Todavía no lo enviará.</p></div>
+            <button class="button primary" type="submit">Generar itinerario</button>
+          </form>
+          <form id="mail-form" hidden>
+            <h2>Redacte un correo</h2>
+            <label for="recipient">Destinatario</label><input id="recipient" name="recipient" type="email" maxlength="254" autocomplete="email" required placeholder="persona@example.com">
+            <label for="mail-request">¿Qué desea comunicar?</label><textarea id="mail-request" name="request" rows="7" maxlength="4000" required placeholder="Un recordatorio amable de la clase del viernes, a las 10:00."></textarea>
+            <p class="field-note">Esta acción solo redacta. El envío se realiza desde el borrador.</p>
+            <button class="button primary" type="submit">Crear borrador</button>
+          </form>
+          <div class="history"><h2>Solicitudes recientes</h2><div id="history-list"><p class="muted">Aquí podrá volver a sus últimas solicitudes.</p></div></div>
+        </aside>
+        <section class="reading" aria-labelledby="result-heading">
+          <div class="result-top"><h2 id="result-heading" tabindex="-1">El resultado aparecerá aquí</h2><span id="result-state" class="state">Sin solicitud</span></div>
+          <p id="status" role="status" aria-live="polite">Elija Itinerario o Correo para empezar. Revise el borrador antes de enviarlo.</p>
+          <div id="result" aria-busy="false"></div>
+          <button id="recover" class="button secondary" hidden>Comprobar estado sin reenviar</button>
+        </section>
+      </div>
+    </section>
+    <noscript><p class="notice">Active JavaScript para acceder y utilizar los agentes. El enlace de retorno a Agentic sigue disponible.</p></noscript>
+  </main>
+  <footer><span>Un borrador no es un envío.</span><span>El remitente se valida en el servidor</span></footer>
+</body>
+</html>

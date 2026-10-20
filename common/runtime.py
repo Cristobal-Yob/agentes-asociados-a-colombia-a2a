@@ -90,7 +90,7 @@ class SafeBoundary:
             )
 
 
-def base_app(name, description):
+def base_app(name, description, health_state=None):
     app = FastAPI(title=name, description=description, version="0.1.0")
     app.add_middleware(SafeBoundary)
 
@@ -136,6 +136,6 @@ def base_app(name, description):
         response_description="Estado del agente",
     )
     async def health():
-        return {"status": "ok", "agent": name}
+        return {"status": "ok", "agent": name, **(health_state() if health_state else {})}
 
     return app

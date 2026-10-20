@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Body
 
 from common.a2a_transport import mount_a2a
+from common.auth import configure_auth
 from common.config import Settings
 from common.contracts import EmailChatRequest, EmailRequest, EmailResponse
 from common.runtime import base_app
@@ -14,10 +15,12 @@ def create_app(settings=None):
     service = EmailService(settings)
     app = base_app(
         "Agente independiente de correo",
-        "Redacta correos de cualquier tema a partir de una solicitud directa y un destinatario "
-        "explícito; también puede recibir un itinerario. No requiere conectarse a turismo. "
+        "Redacta correos de cualquier tema sin exigir destinatario ni aprobación; "
+        "también puede recibir un itinerario. No requiere conectarse a turismo. "
         "Una orden explícita de redactar y enviar con datos suficientes permite enviar desde "
-        "student@example.com en ese turno. Los borradores requieren una confirmación posterior. "
+        "su cuenta configurada en ese turno. "
+        "Redactar no envía. Enviar una redacción vigente exige una orden humana actual, "
+        "sin otro paso de aprobación. "
         "La aceptación del proveedor no garantiza "
         "la llegada al buzón.",
     )
@@ -27,34 +30,29 @@ def create_app(settings=None):
         "/api/chat",
         response_model=EmailResponse,
         tags=["Conversación"],
-        summary="Conversar, redactar y enviar desde su Gmail personal",
-        description="Envíe solo message. Si la respuesta incluye context, devuélvalo intacto "
-        "junto con el siguiente message. Una orden explícita de envío con destinatario y contenido "
-        "suficientes redacta y envía en el mismo turno. Pedir solo redactar devuelve una vista "
-        "previa; en ese caso «Sí, envíalo» con context confirma el texto exacto.",
-        response_description="Aclaración, vista previa pendiente de confirmación o resultado real",
+        summary="Conversar, redactar y enviar desde el Gmail de clases",
+        description="Envíe message y conserve los IDs devueltos para continuar. Pedir redactar "
+        "devuelve asunto y texto sin exigir destinatario ni aprobación y sin enviar. Una orden "
+        "explícita actual de envío con datos suficientes envía en ese turno, sin pedir otra "
+        "aprobación. Para enviar una redacción anterior conserve request_id, session_id y la "
+        "plan_version actual. No necesita copiar context.",
+        response_description="Redacción lista, respuesta conversacional o resultado real del envío",
         responses={
             200: {
                 "content": {
                     "application/json": {
                         "examples": {
-                            "vista_previa": {
-                                "summary": "Vista previa ilustrativa, sin autorización ni envío",
+                            "redaccion": {
+                                "summary": "Redacción ilustrativa, sin aprobación ni envío",
                                 "value": {
-                                    "status": "preview",
-                                    "message": "Ejemplo ilustrativo: revise la vista previa real "
-                                    "y devuelva su context antes de confirmar. "
-                                    "Este ejemplo no contiene una aprobación válida.",
-                                    "conversation_state": "awaiting_confirmation",
-                                    "preview": {
-                                        "draft_id": "BORRADOR_ILUSTRATIVO",
-                                        "session_id": "SESION_ILUSTRATIVA",
-                                        "recipient": "persona@example.com",
+                                    "status": "completed",
+                                    "message": "Asunto: Recordatorio de reunión\n\n"
+                                    "Le recordamos la reunión de mañana.",
+                                    "conversation_state": "draft",
+                                    "delivery": "not_attempted",
+                                    "draft": {
                                         "subject": "Recordatorio de reunión",
                                         "text": "Le recordamos la reunión de mañana.",
-                                        "transport": "gmail",
-                                        "sender": "REMITENTE_CONFIGURADO",
-                                        "expires_at": 0,
                                     },
                                 },
                             }
@@ -69,13 +67,17 @@ def create_app(settings=None):
             EmailChatRequest,
             Body(
                 openapi_examples={
+                    "redaccion_libre": {
+                        "summary": "Redactar sin destinatario ni envío",
+                        "value": {"message": "Redacta un correo amable para reagendar una clase."},
+                    },
                     "primera_solicitud": {
                         "summary": "Primer mensaje, sin contexto previo",
                         "value": {
                             "message": "Envía a persona@example.com un recordatorio "
                             "de la reunión de mañana."
                         },
-                    }
+                    },
                 }
             ),
         ],
@@ -102,19 +104,23 @@ def create_app(settings=None):
         settings,
         "Agente independiente de correo",
         "Prepara un borrador sobre cualquier tema solicitado sin depender de turismo; "
-        "envía desde student@example.com ante una orden humana explícita suficiente, "
-        "o permite confirmar posteriormente una vista previa firmada.",
+        "envía desde sender@example.com ante una orden humana explícita suficiente, "
+        "sin exigir otra aprobación. Redactar no envía ni exige destinatario. "
+        "El contrato tipado conserva la validación de sus firmas técnicas.",
         [
             (
                 "draft",
-                "Preparar la vista previa de un mensaje",
-                "Produce una vista previa firmada del destinatario, el asunto y el texto.",
+                "Redactar un mensaje",
+                "En conversación devuelve asunto y texto sin destinatario ni envío. "
+                "El contrato tipado permite preparar una vista previa firmada.",
             ),
             (
                 "send",
-                "Confirmar una vista previa",
-                "Exige confirmación explícita y una aprobación vigente sin modificaciones.",
+                "Enviar por orden explícita",
+                "Una orden conversacional actual suficiente permite enviar en ese turno. "
+                "El contrato tipado verifica su vista previa y firma vigentes.",
             ),
         ],
     )
+    configure_auth(app, settings, service)
     return app

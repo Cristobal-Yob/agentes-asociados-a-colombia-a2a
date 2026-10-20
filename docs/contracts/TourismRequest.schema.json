@@ -3,6 +3,47 @@
     "TripContext": {
       "additionalProperties": false,
       "properties": {
+        "request_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solicitud durable"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Versi\u00f3n del plan"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operaci\u00f3n idempotente"
+        },
         "city": {
           "anyOf": [
             {
@@ -89,6 +130,24 @@
           "default": null,
           "description": "Contexto opaco del agente de correo. Devuelva context sin interpretarlo.",
           "title": "Continuaci\u00f3n del correo"
+        },
+        "agenda_requested": {
+          "default": false,
+          "title": "Solicitud expl\u00edcita de agenda",
+          "type": "boolean"
+        },
+        "agenda_context": {
+          "anyOf": [
+            {
+              "maxLength": 24000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Continuaci\u00f3n opaca de Agenda"
         }
       },
       "title": "Contexto del viaje",
@@ -97,9 +156,50 @@
   },
   "additionalProperties": false,
   "properties": {
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solicitud durable"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Versi\u00f3n del plan"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operaci\u00f3n idempotente"
+    },
     "message": {
       "default": "",
-      "description": "Preferencias para la visita y solicitud opcional de correo. Una orden expl\u00edcita de env\u00edo permite delegarlo en el mismo turno; un borrador conserva su confirmaci\u00f3n.",
+      "description": "Preferencias para la visita y solicitud opcional de correo. Una orden expl\u00edcita de env\u00edo permite delegarlo en el mismo turno. Una redacci\u00f3n libre puede delegarse sin itinerario ni destinatario y no env\u00eda ni exige aprobaci\u00f3n.",
       "examples": [
         "Bogot\u00e1, 2 d\u00edas, cultura; prep\u00e1ralo por correo para persona@example.com"
       ],

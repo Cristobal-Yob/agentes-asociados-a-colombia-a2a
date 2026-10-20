@@ -9,6 +9,7 @@ from scripts import release_cloud_run as release
 
 def request_env():
     return {
+        "RELEASE_GCP_PROJECT": "example-project",
         "EXPECTED_GITHUB_REPOSITORY": "example/two-agents",
         "GITHUB_REPOSITORY": "example/two-agents",
         "GITHUB_REF": "refs/heads/main",
@@ -24,8 +25,8 @@ def request_env():
 
 
 def service(name="email-agent"):
-    email_url = "https://service.example.invalid"
-    own_url = email_url if name == "email-agent" else "https://service.example.invalid"
+    email_url = "https://service.example.run.app"
+    own_url = email_url if name == "email-agent" else "https://service.example.run.app"
     values = {
         "MODEL_MODE": "vertex",
         "VERTEX_PROJECT_ID": "example-project",
@@ -37,10 +38,12 @@ def service(name="email-agent"):
     if name == "email-agent":
         values.update(
             EMAIL_TRANSPORT="gmail",
-            EMAIL_SENDER="student@example.com",
+            EMAIL_SENDER="sender@example.com",
+            GMAIL_EXPECTED_EMAIL="sender@example.com",
+            GMAIL_OAUTH_PROJECT="example-project",
             ENABLE_REAL_EMAIL="true",
             GMAIL_LEDGER="gcs",
-            GMAIL_LEDGER_BUCKET="example-project-email-agent-ledger",
+            GMAIL_LEDGER_BUCKET="example-project-colombia-a2a-mail-ledger",
             GMAIL_CREDENTIALS_FILE="/secrets/gmail/authorized-user.json",
         )
     else:
@@ -101,7 +104,7 @@ def test_missing_or_foreign_identity_never_reaches_cloud(tmp_path):
     for key, bad in [
         ("GITHUB_REF", "refs/heads/other"),
         ("GITHUB_REPOSITORY", "attacker/other"),
-        ("GCP_DEPLOY_SERVICE_ACCOUNT", "release@example-project.iam.gserviceaccount.com"),
+        ("GCP_DEPLOY_SERVICE_ACCOUNT", "release@example-project.iam.gserviceaccount.invalid"),
         ("GCP_WORKLOAD_IDENTITY_PROVIDER", ""),
     ]:
         env = request_env()
@@ -140,7 +143,7 @@ def test_valid_existing_services_keep_the_fixed_account_and_durable_gcs():
 
 def test_canonical_cloud_run_url_with_project_number_is_supported():
     raw = service()
-    raw["status"]["url"] = "https://service.example.invalid"
+    raw["status"]["url"] = "https://email-agent-123456.us-central1.run.app"
     for entry in raw["spec"]["template"]["spec"]["containers"][0]["env"]:
         if entry["name"] == "PUBLIC_AGENT_URL":
             entry["value"] = raw["status"]["url"]
@@ -197,6 +200,9 @@ def test_stage_contains_only_runtime_allowlist_and_rejects_escaping_symlinks(tmp
         (source / name / "__init__.py").write_text("")
         if name != "common":
             (source / name / "Dockerfile").write_text("FROM scratch")
+    (source / "agenda_agent").mkdir()
+    for name in ("__init__.py", "contracts.py"):
+        (source / "agenda_agent" / name).write_text("")
     (source / "gha-creds-test.json").write_text("private fixture")
     (source / ".env").write_text("private fixture")
     stage = tmp_path / "stage"
@@ -211,6 +217,21 @@ def test_stage_contains_only_runtime_allowlist_and_rejects_escaping_symlinks(tmp
         pytest.skip("La cuenta local no permite crear enlaces simbólicos")
     with pytest.raises(release.ReleaseError):
         release.stage_runtime(source, tmp_path / "other-stage")
+
+
+def test_stage_includes_agenda_types_required_by_both_dockerfiles(tmp_path):
+    source = Path(__file__).resolve().parents[1]
+    stage = tmp_path / "stage"
+    release.stage_runtime(source, stage)
+    for name in ("__init__.py", "contracts.py"):
+        assert (stage / "agenda_agent" / name).read_bytes() == (
+            source / "agenda_agent" / name
+        ).read_bytes()
+    assert (stage / "common" / "firestore_workflows.py").read_bytes() == (
+        source / "common" / "firestore_workflows.py"
+    ).read_bytes()
+    assert not (stage / "agenda_agent" / "service.py").exists()
+    assert not (stage / "agenda_agent" / "app.py").exists()
 
 
 def test_only_exact_digest_update_without_traffic_is_permitted():

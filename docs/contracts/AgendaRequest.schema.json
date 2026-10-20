@@ -1,0 +1,192 @@
+{
+  "$defs": {
+    "AgendaSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fecha inicial"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zona horaria IANA"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{2}:\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hora local inicial"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/SessionSpec"
+          },
+          "maxItems": 7,
+          "title": "Actividades",
+          "type": "array"
+        }
+      },
+      "title": "AgendaSpec",
+      "type": "object"
+    },
+    "SessionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Actividad",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "anyOf": [
+            {
+              "maximum": 480,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duraci\u00f3n en minutos"
+        },
+        "day_offset": {
+          "default": 0,
+          "maximum": 6,
+          "minimum": 0,
+          "title": "D\u00edas desde la fecha inicial",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "SessionSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solicitud durable"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Versi\u00f3n del plan"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operaci\u00f3n idempotente"
+    },
+    "message": {
+      "default": "",
+      "maxLength": 4000,
+      "title": "Mensaje",
+      "type": "string"
+    },
+    "session_id": {
+      "default": "classroom",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Sesi\u00f3n",
+      "type": "string"
+    },
+    "context": {
+      "anyOf": [
+        {
+          "maxLength": 24000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Contexto opaco"
+    },
+    "spec": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AgendaSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Preferencias estructuradas opcionales"
+    },
+    "recipient": {
+      "anyOf": [
+        {
+          "format": "email",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Destinatario del resumen solicitado"
+    }
+  },
+  "title": "AgendaRequest",
+  "type": "object"
+}

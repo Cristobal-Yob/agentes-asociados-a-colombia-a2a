@@ -30,9 +30,39 @@
       "title": "D\u00eda del itinerario",
       "type": "object"
     },
+    "EmailContent": {
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Asunto exacto",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Texto exacto",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "text"
+      ],
+      "title": "EmailContent",
+      "type": "object"
+    },
     "EmailPreview": {
       "additionalProperties": false,
       "properties": {
+        "plan_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Versi\u00f3n aprobada",
+          "type": "integer"
+        },
         "draft_id": {
           "title": "Identificador del borrador",
           "type": "string"
@@ -235,6 +265,47 @@
   },
   "additionalProperties": false,
   "properties": {
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solicitud durable"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Versi\u00f3n del plan"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operaci\u00f3n idempotente"
+    },
     "action": {
       "default": "draft",
       "description": "draft prepara una vista previa; send solicita su env\u00edo.",
@@ -289,6 +360,19 @@
       ],
       "default": null,
       "title": "Itinerario"
+    },
+    "content": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prepara una vista previa del contenido proporcionado; nunca autoriza por s\u00ed solo el env\u00edo.",
+      "title": "Contenido exacto opcional"
     },
     "preview": {
       "anyOf": [

@@ -189,6 +189,8 @@ async def test_gmail_exact_mime_and_consent_precedes_every_external_call(gmail_s
     "identity",
     [
         {"email": "wrong@example.com", "email_verified": True, "sub": "selected-sub"},
+        {"email": "student@example.com", "email_verified": True, "sub": "selected-sub"},
+        {"email": "learner@example.com", "email_verified": True, "sub": "selected-sub"},
         {"email": SENDER, "email_verified": False, "sub": "selected-sub"},
         {"email": SENDER, "email_verified": True, "sub": "different-sub"},
     ],
@@ -270,7 +272,7 @@ async def test_gcs_precondition_duplicate_and_conditional_completion():
         return "MOCK_ADC_TOKEN"
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        ledger = GcsLedger("example-project-email-agent-ledger", client, token)
+        ledger = GcsLedger("example-project-colombia-a2a-mail-ledger", client, token)
         claim = await ledger.reserve("a" * 64)
         assert not claim.new and claim.status == "sent" and claim.provider_id == "stored-id"
         assert requests[0].url.params["ifGenerationMatch"] == "0"
@@ -292,7 +294,7 @@ async def test_gcs_timeout_and_cas_completion_fail_closed():
         return httpx.Response(412)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        ledger = GcsLedger("example-project-email-agent-ledger", client, token)
+        ledger = GcsLedger("example-project-colombia-a2a-mail-ledger", client, token)
         with pytest.raises(httpx.ReadTimeout):
             await ledger.reserve("b" * 64)
         mode = "complete"
@@ -376,3 +378,17 @@ async def test_changed_credential_configuration_invalidates_signed_preview(gmail
         restart = EmailService(gmail_settings, transport=MailTransport(gmail_settings, client))
         assert (await restart.handle(send)).error_code == "approval_invalid"
         assert not provider.requests
+
+
+def test_gcs_ledger_accepts_only_approved_dedicated_bucket():
+    assert (
+        GcsLedger("example-project-colombia-a2a-mail-ledger").bucket
+        == "example-project-colombia-a2a-mail-ledger"
+    )
+    for bucket in (
+        "example-project-email-agent-ledger",
+        "other-bucket",
+        "example-project-colombia-a2a-mail-ledger-extra",
+    ):
+        with pytest.raises(ValueError):
+            GcsLedger(bucket)

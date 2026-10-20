@@ -28,10 +28,10 @@ def test_cloud_plan_requires_explicit_project_and_has_two_private_services():
     assert all("GOOGLE_API_KEY" not in " ".join(command) for command in commands)
     email = deploys[0]
     assert "EMAIL_TRANSPORT=gmail" in " ".join(email)
-    assert "EMAIL_SENDER=student@example.com" in " ".join(email)
+    assert "EMAIL_SENDER=sender@example.com" in " ".join(email)
     assert "GMAIL_LEDGER=gcs" in " ".join(email) and "--set-secrets" in email
     ledger = [
-        command for command in commands if "gs://example-bucket" in command
+        command for command in commands if "gs://example-project-email-agent-ledger" in command
     ]
     assert any("--public-access-prevention" in command for command in ledger)
     assert any("--lifecycle-file" in command for command in ledger)
@@ -41,5 +41,5 @@ def test_cloud_plan_requires_explicit_project_and_has_two_private_services():
 
 
 def test_plan_cannot_target_an_unrelated_ambient_project():
-    with pytest.raises(ValueError, match="example-project"):
-        plan("unrelated-project", "deployer@example.com", "lesson-test")
+    with pytest.raises(ValueError, match="proyecto"):
+        plan("INVALID_PROJECT", "deployer@example.com", "lesson-test")

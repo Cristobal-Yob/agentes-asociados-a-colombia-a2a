@@ -1,8 +1,38 @@
 {
   "$defs": {
+    "EmailContent": {
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "maxLength": 200,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Asunto exacto",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Texto exacto",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "text"
+      ],
+      "title": "EmailContent",
+      "type": "object"
+    },
     "EmailPreview": {
       "additionalProperties": false,
       "properties": {
+        "plan_version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Versi\u00f3n aprobada",
+          "type": "integer"
+        },
         "draft_id": {
           "title": "Identificador del borrador",
           "type": "string"
@@ -75,6 +105,95 @@
   },
   "additionalProperties": false,
   "properties": {
+    "request_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solicitud durable"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Versi\u00f3n del plan"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Operaci\u00f3n idempotente"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sesi\u00f3n de la solicitud"
+    },
+    "workflow_state": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estado durable"
+    },
+    "a2a_task_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tarea A2A remota"
+    },
+    "a2a_context_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Contexto A2A remoto"
+    },
     "status": {
       "description": "Resultado del procesamiento; sent no garantiza llegada al buz\u00f3n.",
       "enum": [
@@ -84,7 +203,8 @@
         "delivery_unknown",
         "error",
         "clarification",
-        "completed"
+        "completed",
+        "cancelled"
       ],
       "title": "Estado",
       "type": "string"
@@ -92,6 +212,19 @@
     "message": {
       "title": "Mensaje",
       "type": "string"
+    },
+    "draft": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmailContent"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Asunto y texto redactados, sin aprobaci\u00f3n ni autorizaci\u00f3n de env\u00edo.",
+      "title": "Redacci\u00f3n sin env\u00edo"
     },
     "preview": {
       "anyOf": [
@@ -161,7 +294,8 @@
             "awaiting_confirmation",
             "sent",
             "failed",
-            "completed"
+            "completed",
+            "cancelled"
           ],
           "type": "string"
         },

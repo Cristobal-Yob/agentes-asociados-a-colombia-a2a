@@ -1,4 +1,5 @@
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -56,6 +57,7 @@ class OwnedServices:
             self.email_port = free_port()
         self.tour_url = f"http://127.0.0.1:{self.tour_port}"
         self.email_url = f"http://127.0.0.1:{self.email_port}"
+        self.keys = {role: secrets.token_urlsafe(32) for role in ("tourism", "email")}
         self.children = []
         self.logs = []
         self.work = Path(
@@ -67,7 +69,16 @@ class OwnedServices:
         port = self.tour_port if agent == "tourism" else self.email_port
         url = self.tour_url if agent == "tourism" else self.email_url
         env = safe_env()
-        env.update({"PORT": str(port), "PUBLIC_AGENT_URL": url, "EMAIL_AGENT_URL": self.email_url})
+        env.update(
+            {
+                "PORT": str(port),
+                "PUBLIC_AGENT_URL": url,
+                "EMAIL_AGENT_URL": self.email_url,
+                "AGENT_API_KEY": self.keys[agent],
+                "EMAIL_AGENT_API_KEY": self.keys["email"] if agent == "tourism" else "",
+                "WORKFLOW_DB_PATH": str(self.work / f"{agent}-{port}.sqlite"),
+            }
+        )
         log_path = self.work / f"{agent}-{port}.log"
         stream = log_path.open("w", encoding="utf-8")
         process = subprocess.Popen(

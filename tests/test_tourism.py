@@ -1,4 +1,6 @@
 import pytest
+from langchain_core.messages import AIMessage
+from semantic_fixtures import ScriptedConversation
 
 from common.config import Settings
 from common.contracts import TourismRequest, TripContext
@@ -6,11 +8,14 @@ from tourism_agent.service import TourismService
 
 
 @pytest.mark.asyncio
-async def test_greeting_never_retrieves_and_asks_one_question():
-    service = TourismService(Settings.offline())
+async def test_greeting_uses_programmed_model_without_retrieval(tmp_path):
+    service = TourismService(
+        Settings.offline(workflow_db_path=str(tmp_path / "tourism.sqlite")),
+        conversation_model=ScriptedConversation(AIMessage(content="Hola. ¿Cómo puedo ayudarle?")),
+    )
     result = await service.handle(TourismRequest(message="Hola"))
-    assert result.status == "clarification"
-    assert result.missing_field == "city"
+    assert result.status == "completed"
+    assert result.message == "Hola. ¿Cómo puedo ayudarle?"
     assert service.catalog.calls == 0
 
 

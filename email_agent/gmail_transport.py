@@ -57,9 +57,7 @@ class GmailTransport:
         self.settings = settings
         self.client = client
         if settings.email_sender != SENDER:
-            raise ValueError(
-                "El remitente de Gmail debe ser la cuenta aprobada student@example.com"
-            )
+            raise ValueError(f"El remitente de Gmail debe ser la cuenta aprobada {SENDER}")
         if os.getenv("K_SERVICE") and settings.gmail_ledger != "gcs":
             raise ValueError(
                 "Gmail en Cloud Run exige un registro GCS compartido; SQLite está prohibido"

@@ -19,10 +19,13 @@ from a2a.types import (
     AgentCard,
     AgentInterface,
     AgentSkill,
+    APIKeySecurityScheme,
     Artifact,
     Message,
     Part,
     Role,
+    SecurityRequirement,
+    SecurityScheme,
     SendMessageRequest,
     Task,
     TaskNotCancelableError,
@@ -95,9 +98,9 @@ class Executor(AgentExecutor):
             request = self.request_type.model_validate(data[0])
             result = (await self.service.handle(request)).model_dump(mode="json")
             state = TaskState.TASK_STATE_COMPLETED
-            if result["status"] in {"preview", "clarification"}:
+            if result["status"] in {"preview", "clarification", "conflict"}:
                 state = TaskState.TASK_STATE_INPUT_REQUIRED
-            elif result["status"] in {"error", "delivery_unknown"}:
+            elif result["status"] in {"error", "delivery_unknown", "creation_unknown"}:
                 state = TaskState.TASK_STATE_FAILED
         except (ValueError, ValidationError, TypeError):
             result = {
@@ -127,6 +130,16 @@ class Executor(AgentExecutor):
 
 def mount_a2a(app, service, request_type, settings, name, description, skills):
     card = AgentCard(
+        security_schemes={
+            "service_key": SecurityScheme(
+                api_key_security_scheme=APIKeySecurityScheme(
+                    location="header",
+                    name="X-API-Key",
+                    description="Clave privada de este servicio",
+                )
+            )
+        },
+        security_requirements=[SecurityRequirement(schemes={"service_key": {"list": []}})],
         name=name,
         description=description + " No admite cancelación. Las tareas se almacenan temporalmente; "
         "el cliente debe conservar el contexto tipado.",
@@ -153,10 +166,12 @@ def mount_a2a(app, service, request_type, settings, name, description, skills):
     return card
 
 
-async def send_typed(base_url, payload, *, iam=False, task_id="", context_id="", http_client=None):
+async def send_typed(
+    base_url, payload, *, iam=False, task_id="", context_id="", http_client=None, api_key=""
+):
     """Official SDK discovery + SendMessage; card URLs must exactly match configured peer."""
     base = checked_base(base_url)
-    headers = {}
+    headers = {"X-API-Key": api_key} if api_key else {}
     if iam:
         from google.auth.transport.requests import Request
         from google.oauth2 import id_token
@@ -165,6 +180,9 @@ async def send_typed(base_url, payload, *, iam=False, task_id="", context_id="",
         headers["Authorization"] = f"Bearer {token}"
     owned = http_client is None
     client = http_client or httpx.AsyncClient(timeout=12, follow_redirects=False, headers=headers)
+    previous_headers = dict(client.headers)
+    if not owned:
+        client.headers.update(headers)
     try:
         async with asyncio.timeout(15):
             card = await A2ACardResolver(client, base).get_agent_card()
@@ -201,13 +219,36 @@ async def send_typed(base_url, payload, *, iam=False, task_id="", context_id="",
     finally:
         if owned:
             await client.aclose()
+        else:
+            client.headers.clear()
+            client.headers.update(previous_headers)
 
 
 def email_peer(settings):
     async def delegate(request):
-        data, _ = await send_typed(
-            settings.peer_url, request.model_dump(mode="json"), iam=settings.peer_iam
+        data, task = await send_typed(
+            settings.peer_url,
+            request.model_dump(mode="json"),
+            iam=settings.peer_iam,
+            api_key=settings.email_peer_api_key,
         )
+        data.update(a2a_task_id=task.id, a2a_context_id=task.context_id)
         return EmailResponse.model_validate(data)
+
+    return delegate
+
+
+def agenda_peer(settings):
+    from agenda_agent.contracts import AgendaResponse
+
+    async def delegate(request):
+        data, task = await send_typed(
+            settings.agenda_peer_url,
+            request.model_dump(mode="json"),
+            iam=settings.peer_iam,
+            api_key=settings.agenda_peer_api_key,
+        )
+        data.update(a2a_task_id=task.id, a2a_context_id=task.context_id)
+        return AgendaResponse.model_validate(data)
 
     return delegate

@@ -5,9 +5,9 @@ import re
 import shlex
 
 
-def plan(project, account, tag):
-    if project != "example-project":
-        raise ValueError("Este plan de clase se limita al proyecto seleccionado example-project")
+def plan(project, account, tag, *, sender="sender@example.com"):
+    if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", project):
+        raise ValueError("Se exige un proyecto explicito valido")
     region = "us-central1"
     repo = "example-agents"
     common = ["--project", project, "--account", account]
@@ -205,10 +205,11 @@ def plan(project, account, tag):
         "--service-account",
         email_sa,
         "--set-env-vars",
-        "MODEL_MODE=vertex,VERTEX_PROJECT_ID=example-project,VERTEX_LOCATION=global,"
-        "MODEL_ID=gemini-3.1-flash-lite,EMAIL_TRANSPORT=gmail,EMAIL_SENDER=student@example.com,"
+        f"MODEL_MODE=vertex,VERTEX_PROJECT_ID={project},VERTEX_LOCATION=global,"
+        f"MODEL_ID=gemini-3.1-flash-lite,EMAIL_TRANSPORT=gmail,EMAIL_SENDER={sender},"
+        f"GMAIL_EXPECTED_EMAIL={sender},GMAIL_OAUTH_PROJECT={project},"
         "GMAIL_CREDENTIALS_FILE=/secrets/gmail/authorized-user.json,GMAIL_LEDGER=gcs,"
-        "GMAIL_LEDGER_BUCKET=example-project-email-agent-ledger,"
+        f"GMAIL_LEDGER_BUCKET={project}-email-agent-ledger,"
         "ENABLE_REAL_EMAIL=true,PUBLIC_AGENT_URL=https://pending.invalid",
         "--set-secrets",
         "APPROVAL_SIGNING_KEY=email-agent-approval:latest,"
@@ -257,7 +258,7 @@ def plan(project, account, tag):
         "--service-account",
         tour_sa,
         "--set-env-vars",
-        "MODEL_MODE=vertex,VERTEX_PROJECT_ID=example-project,VERTEX_LOCATION=global,"
+        f"MODEL_MODE=vertex,VERTEX_PROJECT_ID={project},VERTEX_LOCATION=global,"
         "MODEL_ID=gemini-3.1-flash-lite,ENABLE_MCP=false,PEER_USE_IAM=true,"
         "EMAIL_AGENT_URL=<EMAIL_URL_FROM_DESCRIBE>,PUBLIC_AGENT_URL=https://pending.invalid",
         *run_flags,
@@ -303,7 +304,6 @@ def main():
     parser.add_argument(
         "--project",
         required=True,
-        choices=["example-project"],
         help="Proyecto GCP seleccionado para la clase",
     )
     parser.add_argument(
@@ -312,6 +312,7 @@ def main():
     parser.add_argument(
         "--tag", required=True, help="Etiqueta única de imagen para esta compilación aprobada"
     )
+    parser.add_argument("--sender", required=True, help="Cuenta propia autorizada de Gmail")
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", args.project):
         parser.error("Identificador de proyecto no válido")
@@ -320,19 +321,20 @@ def main():
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", args.tag):
         parser.error("Etiqueta de imagen no válida")
     print(
-        "SOLO PLAN. No se ejecuta ningún comando. Destino: example-project. "
+        "SOLO PLAN. No se ejecuta ningún comando. Verifique su destino explicito. "
         "La aprobación del nuevo despliegue está pendiente."
     )
     print(
-        "Gmail student@example.com está seleccionado. Los pasos de secretos y despliegue exigen "
-        "la autorización OAuth de escritorio aprobada y sus archivos protegidos, "
-        "documentados como verificados localmente; requieren aprobación independiente."
+        "Gmail sender@example.com está seleccionado. "
+        "Los pasos de secretos y despliegue exigen obtener y verificar "
+        "la autorización OAuth de escritorio y sus archivos protegidos; "
+        "requieren aprobación independiente."
     )
     print(
         "Deténgase ante cualquier salida distinta de cero. Sustituya las URL de ejemplo "
         "solo por la salida verificada de describe."
     )
-    for command in plan(args.project, args.account, args.tag):
+    for command in plan(args.project, args.account, args.tag, sender=args.sender):
         print(shlex.join(command))
 
 

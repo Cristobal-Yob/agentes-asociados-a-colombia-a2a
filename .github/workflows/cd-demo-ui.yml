@@ -1,0 +1,91 @@
+name: Prepare standalone Colombia UI revision without traffic
+
+on:
+  workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Reviewed main commit explicitly approved for this release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: classroom-ui-release
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.PUBLIC_SOURCE_DEPLOY_ENABLED == 'true' }}
+    uses: ./.github/workflows/ci-demo-ui.yml
+  candidate:
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.PUBLIC_SOURCE_DEPLOY_ENABLED == 'true' }}
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: classroom-ui-release
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      UI_APPROVED_SHA: ${{ inputs.approved_sha }}
+      UI_GCP_PROJECT: ${{ vars.COLOMBIA_UI_GCP_PROJECT }}
+      UI_APPROVED_PROJECT: ${{ vars.COLOMBIA_UI_GCP_PROJECT }}
+      UI_GCP_REGION: us-central1
+      UI_SERVICE: classroom-ui
+      UI_ALLOWED_EMAIL: ${{ vars.COLOMBIA_UI_ALLOWED_EMAIL }}
+      UI_APPROVED_OWNER_EMAIL: ${{ vars.COLOMBIA_UI_ALLOWED_EMAIL }}
+      UI_ITINERARY_URL: ${{ vars.COLOMBIA_UI_ITINERARY_URL }}
+      UI_EMAIL_URL: ${{ vars.COLOMBIA_UI_EMAIL_URL }}
+      UI_HUB_RETURN: ${{ vars.COLOMBIA_UI_HUB_RETURN }}
+      UI_SENDER_EMAIL: ${{ vars.COLOMBIA_UI_SENDER_EMAIL }}
+      UI_ORIGIN: ${{ vars.COLOMBIA_UI_ORIGIN }}
+      UI_FIRESTORE_DATABASE: ${{ vars.COLOMBIA_UI_FIRESTORE_DATABASE }}
+      UI_RUNTIME_SERVICE_ACCOUNT: ${{ vars.COLOMBIA_UI_RUNTIME_SERVICE_ACCOUNT }}
+      UI_DEPLOY_SERVICE_ACCOUNT: ${{ vars.COLOMBIA_UI_DEPLOY_SERVICE_ACCOUNT }}
+      UI_WIF_PROVIDER: ${{ vars.COLOMBIA_UI_WIF_PROVIDER }}
+      UI_IMAGE_REPOSITORY: ${{ vars.COLOMBIA_UI_IMAGE_REPOSITORY }}
+      UI_PYTHON_BASE_IMAGE: ${{ vars.COLOMBIA_UI_PYTHON_BASE_IMAGE }}
+      UI_OAUTH_ID_SECRET: ${{ vars.COLOMBIA_UI_OAUTH_ID_SECRET }}
+      UI_OAUTH_SECRET: ${{ vars.COLOMBIA_UI_OAUTH_SECRET }}
+      UI_ITINERARY_KEY_SECRET: ${{ vars.COLOMBIA_UI_ITINERARY_KEY_SECRET }}
+      UI_EMAIL_KEY_SECRET: ${{ vars.COLOMBIA_UI_EMAIL_KEY_SECRET }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate target and explicit commit before authentication
+        run: python3 -B -m demo_ui.release validate
+      - name: Stage only the independent UI
+        run: python3 -B -m demo_ui.release stage --destination "$RUNNER_TEMP/colombia-ui-stage"
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ vars.COLOMBIA_UI_GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.COLOMBIA_UI_WIF_PROVIDER }}
+          service_account: ${{ vars.COLOMBIA_UI_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Require an already provisioned service and preserve its rollback configuration
+        run: |
+          gcloud run services describe "$UI_SERVICE" --project="$UI_GCP_PROJECT" --region=us-central1 --format=json > "$RUNNER_TEMP/colombia-ui-before.json"
+          test -s "$RUNNER_TEMP/colombia-ui-before.json"
+          gcloud firestore databases describe --database="$UI_FIRESTORE_DATABASE" --project="$UI_GCP_PROJECT" --format='value(name)' > /dev/null
+      - name: Build and check the image, then publish its immutable digest
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          docker build --build-arg "PYTHON_BASE_IMAGE=$UI_PYTHON_BASE_IMAGE" -f "$RUNNER_TEMP/colombia-ui-stage/demo_ui/Dockerfile" -t "$UI_IMAGE_REPOSITORY:$GITHUB_SHA" "$RUNNER_TEMP/colombia-ui-stage"
+          docker run --rm "$UI_IMAGE_REPOSITORY:$GITHUB_SHA" python -B -c "from demo_ui.app import create_app; from demo_ui.config import Config; assert not Config().ready; assert create_app()"
+          docker push "$UI_IMAGE_REPOSITORY:$GITHUB_SHA"
+          DIGEST=$(gcloud artifacts docker images describe "$UI_IMAGE_REPOSITORY:$GITHUB_SHA" --project="$UI_GCP_PROJECT" --format='value(image_summary.digest)')
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "UI_IMAGE_DIGEST=$UI_IMAGE_REPOSITORY@$DIGEST" >> "$GITHUB_ENV"
+      - name: Create a candidate revision without public traffic or IAM changes
+        run: |
+          gcloud run deploy "$UI_SERVICE" --project="$UI_GCP_PROJECT" --region=us-central1 --billing-project="$UI_GCP_PROJECT" \
+            --image="$UI_IMAGE_DIGEST" --service-account="$UI_RUNTIME_SERVICE_ACCOUNT" \
+            --no-traffic --timeout=120 --concurrency=8 --max-instances=2 --min-instances=0 \
+            --update-env-vars="COLOMBIA_UI_ALLOWED_EMAIL=$UI_ALLOWED_EMAIL,COLOMBIA_UI_ITINERARY_URL=$UI_ITINERARY_URL,COLOMBIA_UI_EMAIL_URL=$UI_EMAIL_URL,COLOMBIA_UI_HUB_RETURN=$UI_HUB_RETURN,COLOMBIA_UI_SENDER_EMAIL=$UI_SENDER_EMAIL,COLOMBIA_UI_ORIGIN=$UI_ORIGIN,COLOMBIA_UI_FIRESTORE_PROJECT=$UI_GCP_PROJECT,COLOMBIA_UI_FIRESTORE_DATABASE=$UI_FIRESTORE_DATABASE" \
+            --update-secrets="COLOMBIA_UI_GOOGLE_CLIENT_ID=$UI_OAUTH_ID_SECRET,COLOMBIA_UI_GOOGLE_CLIENT_SECRET=$UI_OAUTH_SECRET,COLOMBIA_UI_ITINERARY_KEY=$UI_ITINERARY_KEY_SECRET,COLOMBIA_UI_EMAIL_KEY=$UI_EMAIL_KEY_SECRET"
+          echo 'Candidate prepared with no traffic. OAuth, public login, browser checks and promotion require their own explicit approval.' >> "$GITHUB_STEP_SUMMARY"

@@ -1,9 +1,11 @@
 import asyncio
-import re
+import time
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
 
+from agenda_agent.contracts import AgendaRequest, AgendaSpec, SessionSpec
 from common.config import Settings
 from common.contracts import (
     Day,
@@ -13,10 +15,10 @@ from common.contracts import (
     TourismResponse,
     TripContext,
 )
-from common.conversation import confirms_preview, email_intent, recipient_from, unquoted
 from common.model import ModelPort
 from common.runtime import BoundedGraph
-from tourism_agent.catalog import CATALOG, Catalog, normalize
+from common.workflows import WorkflowRunner, child_operation, validation_evidence
+from tourism_agent.catalog import Catalog
 
 ACTIVITY_LABELS = {
     "bogota-gold": "Museo del Oro",
@@ -29,38 +31,6 @@ ACTIVITY_LABELS = {
     "cartagena-clock": "Recorrido por la Torre del Reloj y el Portal de los Dulces",
     "cartagena-castle": "Castillo de San Felipe",
 }
-EMAIL_ACTION = re.compile(
-    r"\b(?:manda(?:me|melo|lo)?|mandar|envia(?:me|melo|lo)?|enviar|envies|"
-    r"comparte(?:lo|me)?|comparti(?:lo|me)?|compartir|redacta(?:me)?|redactar|"
-    r"prepara(?:me|lo)?|preparar|send|share|draft)\b"
-)
-EMAIL_CANCEL = re.compile(
-    r"\b(?:no|nunca)\b.{0,60}\b(?:correo|email|e-mail|envies|mandes|enviar|mandar)\b"
-)
-
-
-def mail_intent(message, context, requested, recipient):
-    """Only direct user input and typed context can request a draft, never source text."""
-    data = {"draft_email": context.draft_email or requested, "recipient": context.recipient}
-    message = unquoted(message)
-    text = normalize(message)
-    if EMAIL_CANCEL.search(text):
-        return {"draft_email": False, "recipient": None}
-    if (
-        EMAIL_ACTION.search(text)
-        and (
-            re.search(r"\b(?:correo|email|e-mail)\b", text)
-            or "@" in message
-            or re.search(r"\b(?:mandamelo|enviamelo|envialo|compartelo)\b", text)
-        )
-        or re.search(r"\b(?:por|via)\s+(?:correo|email|e-mail)\b", text)
-    ):
-        data["draft_email"] = True
-    if recipient is not None:
-        data["recipient"] = recipient
-    elif "@" in message:
-        data["recipient"] = recipient_from(message)
-    return data
 
 
 class TripState(TypedDict, total=False):
@@ -73,15 +43,37 @@ class TripState(TypedDict, total=False):
     error: str
     email_action: str
     confirmation: bool
+    agenda_confirmation: bool
     progress: dict
 
 
 class TourismService:
-    def __init__(self, settings=None, peer=None, catalog=None, model=None):
+    def __init__(
+        self,
+        settings=None,
+        peer=None,
+        catalog=None,
+        model=None,
+        agenda_peer=None,
+        conversation_model=None,
+    ):
         self.settings = settings or Settings.from_env("tourism")
+        self.workflow = WorkflowRunner.from_settings(
+            self.settings, "tourism", TourismResponse, clock=lambda: self.clock()
+        )
+        self.clock = time.time
         self.peer = peer
+        self.agenda_peer = agenda_peer
         self.catalog = catalog or Catalog()
         self.model = model or ModelPort(self.settings)
+        self.conversation = None
+        if conversation_model is not None or self.settings.model_mode == "vertex":
+            from tourism_agent.conversation import NativeConversation
+
+            native_model = conversation_model or (
+                self.model if isinstance(self.model, ModelPort) else ModelPort(self.settings)
+            )
+            self.conversation = NativeConversation(self, native_model)
         self.runtime = BoundedGraph()
         graph = StateGraph(TripState)
         for name in [
@@ -91,6 +83,8 @@ class TourismService:
             "plan",
             "delegate",
             "confirm_email",
+            "delegate_agenda",
+            "confirm_agenda",
             "error",
         ]:
             graph.add_node(name, getattr(self, name))
@@ -98,7 +92,9 @@ class TourismService:
         graph.add_conditional_edges(
             "understand",
             lambda s: (
-                "confirm_email"
+                "confirm_agenda"
+                if s.get("agenda_confirmation")
+                else "confirm_email"
                 if s.get("confirmation")
                 else "clarify"
                 if s.get("missing")
@@ -110,15 +106,37 @@ class TourismService:
         graph.add_conditional_edges(
             "plan",
             lambda s: (
-                "error" if s.get("error") else "delegate" if s["email_action"] == "draft" else END
+                "error"
+                if s.get("error")
+                else "delegate_agenda"
+                if s["context"].agenda_requested
+                else "delegate"
+                if s["email_action"] == "draft"
+                else END
             ),
         )
         graph.add_edge("delegate", END)
         graph.add_edge("confirm_email", END)
+        graph.add_edge("delegate_agenda", END)
+        graph.add_edge("confirm_agenda", END)
         graph.add_edge("error", END)
         self.graph = graph.compile()
 
     async def handle(self, request):
+        if request.message.strip():
+            if self.conversation is None:
+                return TourismResponse(
+                    status="error",
+                    context=request.context,
+                    message="El perfil fixture requiere un modelo conversacional inyectado.",
+                    error_code="conversation_model_required",
+                )
+            return await self.conversation.handle(request)
+        if self.workflow:
+            return await self.workflow.run(request, self._handle)
+        return await self._handle(request)
+
+    async def _handle(self, request):
         progress = {}
         try:
             return (await self.runtime.run(self.graph, {"request": request, "progress": progress}))[
@@ -147,34 +165,11 @@ class TourismService:
 
     async def understand(self, state):
         req = state["request"]
-        if req.context.email_context:
-            return {"context": req.context, "confirmation": True}
         data = req.context.model_dump()
-        text = normalize(req.message)
-        data.update(mail_intent(req.message, req.context, req.draft_email, req.recipient))
-        for city in CATALOG:
-            if city in text and not data["city"]:
-                data["city"] = city
-        if (
-            not data["city"]
-            and text
-            and text not in {"hola", "hello", "hi", "buenas", "buenos dias"}
-        ):
-            if len(text.split()) == 1 and "@" not in text and not EMAIL_ACTION.search(text):
-                data["city"] = text
-        if not data["days"]:
-            match = re.search(r"\b([1-7])\b", text)
-            if match:
-                data["days"] = int(match.group(1))
-        if not data["interests"]:
-            tags = {
-                "culture": ["cultura", "culture", "museo", "historia"],
-                "nature": ["naturaleza", "nature", "jardin"],
-                "food": ["comida", "food", "gastronomia"],
-            }
-            data["interests"] = [
-                key for key, words in tags.items() if any(word in text for word in words)
-            ]
+        data.update(
+            draft_email=req.context.draft_email or req.draft_email,
+            recipient=req.recipient or req.context.recipient,
+        )
         context = TripContext.model_validate(data)
         missing = next(
             (field for field in ["city", "days", "interests"] if not getattr(context, field)), ""
@@ -214,6 +209,7 @@ class TourismService:
         }
 
     async def plan(self, state):
+        phase = "select_invocation"
         try:
             result = await self.model.invoke(
                 {
@@ -227,6 +223,9 @@ class TourismService:
                     "sources": [{"id": s.id, "name": s.name} for s in state["sources"]],
                 }
             )
+            phase = "select_shape"
+            if not isinstance(result, dict):
+                raise ValueError("invalid_select_shape")
             ids = result["ids"]
             email_action = result["email_action"]
             if email_action not in {"none", "draft"}:
@@ -234,6 +233,7 @@ class TourismService:
             if not state["context"].draft_email or not state["context"].recipient:
                 email_action = "none"
             records = {s.id: s for s in state["sources"]}
+            phase = "grounded_ids"
             if (
                 not isinstance(ids, list)
                 or not ids
@@ -242,6 +242,7 @@ class TourismService:
             ):
                 raise ValueError("ungrounded_model_output")
             selected = [records[id_] for id_ in ids]
+            phase = "itinerary_construction"
             days = [
                 Day(
                     day=n + 1,
@@ -297,8 +298,66 @@ class TourismService:
                     else "completed",
                 ),
             }
-        except Exception:
-            return {"error": "model_or_grounding_error"}
+        except Exception as error:
+            name = type(error).__name__
+            allowed_exceptions = {
+                "KeyError",
+                "ValueError",
+                "TypeError",
+                "TimeoutError",
+                "ValidationError",
+                "OutputParserException",
+            }
+            reason = {
+                "KeyError": "select_missing_field",
+                "TypeError": "select_invalid_type",
+                "TimeoutError": "model_timeout",
+                "OutputParserException": "model_json_invalid",
+                "ValidationError": "planner_validation_error",
+            }.get(name, "planner_unclassified_error")
+            allowed_reasons = {
+                "model_call_limit",
+                "model_input_limit",
+                "model_output_limit",
+                "invalid_select_shape",
+                "invalid_email_action",
+                "ungrounded_model_output",
+            }
+            if (
+                isinstance(error, ValueError)
+                and error.args
+                and isinstance(error.args[0], str)
+                and error.args[0] in allowed_reasons
+            ):
+                reason = error.args[0]
+            diagnostic = {
+                "phase": phase,
+                "error_code": reason,
+                "exception_type": name if name in allowed_exceptions else "OtherError",
+            }
+            if isinstance(error, ValidationError):
+                diagnostic["validation_errors"] = validation_evidence(
+                    error.errors(),
+                    {
+                        "city",
+                        "days",
+                        "summary",
+                        "sources",
+                        "warnings",
+                        "model_mode",
+                        "day",
+                        "activities",
+                        "source_ids",
+                        "id",
+                        "name",
+                        "url",
+                        "provenance",
+                        "retrieved_at",
+                        "fixture_as_of",
+                        "source_reviewed_at",
+                    },
+                )
+            return {"error": "model_or_grounding_error", "diagnostic": diagnostic}
 
     @staticmethod
     def unknown_delegated_send(response):
@@ -329,7 +388,8 @@ class TourismService:
     async def delegate(self, state):
         response = state["response"]
         req = state["request"]
-        direct_send = email_intent(req.message) == "send"
+        direct_send = bool(req.message.strip())
+        may_send = direct_send or state.get("native", False)
         if direct_send:
             # El contexto no vuelve a conservar una intención cuyo remoto puede haber enviado.
             response = response.model_copy(
@@ -342,16 +402,20 @@ class TourismService:
         try:
             if self.peer is None:
                 raise RuntimeError("peer_unavailable")
-            if direct_send:
+            if may_send:
                 # Estado por solicitud, también accesible si vence el límite exterior del grafo.
                 state["progress"].update({"direct_send": True, "response": response})
-            # El envío directo comparte los 15 s del SDK; preview conserva su límite de 8 s.
+            # El par conversacional decide si hay envío: cualquier llamada nativa puede
+            # contener un efecto y comparte los 15 s del SDK, sin reintentos.
             # El cliente HTTP puede vencer a los 12 s y el grafo completo a los 35 s:
             # cualquier corte después de delegar exige resultado incierto, nunca un reintento.
-            async with asyncio.timeout(15 if direct_send else 8):
+            async with asyncio.timeout(15 if may_send else 8):
                 draft = await self.peer(
                     EmailRequest(
-                        message=req.message if direct_send else None,
+                        message=req.message if direct_send or state.get("native") else None,
+                        request_id=req.request_id,
+                        plan_version=req.plan_version,
+                        operation_id=child_operation(req.operation_id, "email"),
                         session_id=req.session_id,
                         recipient=state["context"].recipient,
                         itinerary=response.itinerary,
@@ -359,7 +423,7 @@ class TourismService:
                 )
             if (
                 draft.status in {"sent", "simulated", "delivery_unknown"}
-                or direct_send
+                or may_send
                 and draft.status == "error"
             ):
                 context = response.context.model_copy(
@@ -379,6 +443,20 @@ class TourismService:
                         }
                     )
                 }
+            if state.get("native") and draft.status in {"completed", "clarification", "cancelled"}:
+                return {
+                    "response": response.model_copy(
+                        update={
+                            "email": draft,
+                            "message": draft.message,
+                            "status": "completed" if draft.status == "cancelled" else draft.status,
+                            "context": response.context.model_copy(
+                                update={"draft_email": False, "email_context": draft.context}
+                            ),
+                            "conversation_state": draft.conversation_state,
+                        }
+                    )
+                }
             if draft.status != "preview":
                 raise RuntimeError("peer_draft_error")
             context = response.context.model_copy(
@@ -394,7 +472,7 @@ class TourismService:
                 )
             }
         except Exception:
-            if direct_send:
+            if may_send:
                 return {"response": self.unknown_delegated_send(response)}
             return {
                 "response": response.model_copy(
@@ -420,6 +498,10 @@ class TourismService:
                     EmailRequest(
                         message=req.message,
                         context=context.email_context,
+                        recipient=context.recipient,
+                        request_id=req.request_id,
+                        plan_version=req.plan_version,
+                        operation_id=child_operation(req.operation_id, "email"),
                         session_id=req.session_id,
                     )
                 )
@@ -439,8 +521,9 @@ class TourismService:
                     conversation_state=result.conversation_state,
                 )
             }
+
         except Exception:
-            attempted = confirms_preview(req.message)
+            attempted = True
             return {
                 "response": TourismResponse(
                     status="error",
@@ -457,6 +540,89 @@ class TourismService:
                         conversation_state="failed",
                     ),
                     conversation_state="failed",
+                )
+            }
+
+    async def delegate_agenda(self, state):
+        itinerary = state["response"].itinerary
+        spec = AgendaSpec(
+            sessions=[
+                SessionSpec(title=", ".join(day.activities), day_offset=day.day - 1)
+                for day in itinerary.days
+            ]
+        )
+        return await self.call_agenda(state, spec)
+
+    async def confirm_agenda(self, state):
+        return await self.call_agenda(state, None)
+
+    async def call_agenda(self, state, spec):
+        req = state["request"]
+        base = state.get("response") or TourismResponse(
+            status="completed", message="Continuación de agenda.", context=state["context"]
+        )
+        try:
+            if self.agenda_peer is None:
+                raise ValueError("agenda_peer_unavailable")
+            async with asyncio.timeout(15):
+                result = await self.agenda_peer(
+                    AgendaRequest(
+                        message=req.message,
+                        request_id=req.request_id,
+                        plan_version=req.plan_version,
+                        operation_id=child_operation(req.operation_id, "agenda"),
+                        session_id=req.session_id,
+                        context=state["context"].agenda_context,
+                        spec=spec,
+                        recipient=state["context"].recipient,
+                    )
+                )
+            context = base.context.model_copy(
+                update={
+                    "agenda_context": result.context
+                    if result.status != "created" or (result.email or {}).get("status") == "preview"
+                    else None,
+                    "agenda_requested": result.status != "created",
+                    "draft_email": False,
+                }
+            )
+            return {
+                "response": base.model_copy(
+                    update={
+                        "agenda": result,
+                        "context": context,
+                        "message": result.message,
+                        "status": "clarification"
+                        if result.status == "clarification"
+                        else "partial"
+                        if result.status in {"error", "conflict", "creation_unknown"}
+                        else "completed",
+                        "missing_field": result.missing_field,
+                        "error_code": result.error_code,
+                        "conversation_state": "awaiting_confirmation"
+                        if result.status == "preview"
+                        else "failed"
+                        if result.status in {"error", "creation_unknown"}
+                        else "completed",
+                        "email": EmailResponse.model_validate(result.email)
+                        if result.email
+                        else None,
+                    }
+                )
+            }
+        except Exception:
+            return {
+                "response": base.model_copy(
+                    update={
+                        "status": "partial",
+                        "error_code": "agenda_peer_unavailable",
+                        "message": (
+                            "Se conservó el itinerario, pero no se obtuvo el resultado de "
+                            "Agenda. Si estaba confirmando, la creación puede ser incierta; no"
+                            " se reintentó ni se envió una confirmación por correo."
+                        ),
+                        "conversation_state": "failed",
+                    }
                 )
             }
 

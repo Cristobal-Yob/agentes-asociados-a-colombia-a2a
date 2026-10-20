@@ -1,6 +1,11 @@
 ﻿param([string]$PythonPath)
 
 $ErrorActionPreference = 'Stop'
+$env:COLOMBIA_LIVE_OPT_IN = 'true'
+$env:VERTEX_PROJECT_ID = 'example-project'
+$env:GMAIL_EXPECTED_EMAIL = 'sender@example.com'
+$env:GMAIL_OAUTH_PROJECT = 'example-project'
+$env:EMAIL_AGENT_API_KEY = 'SYNTHETIC_TEST_EMAIL_API_KEY_32_BYTES'
 $sourceRoot = Split-Path $PSScriptRoot -Parent
 $workRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot '../../work'))
 if (-not $PythonPath) { $PythonPath = Join-Path $workRoot 'colombia-venv/Scripts/python.exe' }
@@ -47,11 +52,12 @@ function Reply($Status, $Context = $null, $Preview = $null, $Delivery = $null) {
 $preview = [pscustomobject]@{
     recipient = 'persona@example.com'; subject = 'Reunión mañana'
     text = "Primera línea exacta.`nSegunda línea: café."
-    sender = 'student@example.com'; transport = 'gmail'; expires_at = 4102444800
+    sender = 'sender@example.com'; transport = 'gmail'; expires_at = 4102444800
 }
 
 function Invoke-RestMethod {
-    param($Uri, $Method, $ContentType, $Body, $TimeoutSec, $MaximumRedirection, $ErrorAction)
+    param($Uri, $Method, $ContentType, $Body, $TimeoutSec, $MaximumRedirection, $ErrorAction, $Headers)
+    Assert-True ($Headers['X-API-Key'] -eq 'SYNTHETIC_TEST_EMAIL_API_KEY_32_BYTES') 'Falta autenticación de Correo'
     Assert-True ($Uri -eq 'http://127.0.0.1:8002/api/chat') 'URL inesperada'
     Assert-True ($Body -is [byte[]]) 'El JSON debe enviarse como bytes UTF-8'
     Assert-True ($MaximumRedirection -eq 0) 'No se permiten redirecciones'
@@ -171,12 +177,15 @@ function New-StartupFixture {
     [void](New-Item -ItemType Directory -Path (Join-Path $project 'email_agent') -Force)
     [void](New-Item -ItemType Directory -Path $private -Force)
     Copy-Item -LiteralPath $startScript -Destination (Join-Path $project 'scripts/start_local.ps1')
-    $personal = Join-Path $fixture 'work/gmail-oauth-personal'
+    $personal = Join-Path $fixture 'work/gmail-oauth-clases'
     [void](New-Item -ItemType Directory -Path $personal -Force)
     [IO.File]::WriteAllText((Join-Path $personal 'authorized-user.json'), '{"type":"fixture"}')
     [IO.File]::WriteAllText((Join-Path $private 'approval-key.txt'), ('p' * 32))
+    $auth = Join-Path $fixture 'work/service-auth'
+    [void](New-Item -ItemType Directory -Path $auth -Force)
+    foreach ($role in @('email','tourism','agenda')) { [IO.File]::WriteAllText((Join-Path $auth ($role + '-api-key.txt')), ('s' * 40)) }
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
-    foreach ($path in @((Join-Path $personal 'authorized-user.json'), (Join-Path $private 'approval-key.txt'))) {
+    foreach ($path in @((Join-Path $personal 'authorized-user.json'), (Join-Path $private 'approval-key.txt'), (Join-Path $auth 'email-api-key.txt'), (Join-Path $auth 'tourism-api-key.txt'), (Join-Path $auth 'agenda-api-key.txt'))) {
         $acl = [Security.AccessControl.FileSecurity]::new()
         $acl.SetOwner($identity)
         $acl.SetAccessRuleProtection($true, $false)
@@ -209,13 +218,34 @@ Run-Case 'Inicio nativo hermético usa perfil local solo en hijo y conserva ento
         Assert-True ($env:APPROVAL_SIGNING_KEY -ceq 'CLAVE_ANTERIOR_FICTICIA') 'Se alteró entorno del llamador'
         $data = Get-Content -LiteralPath $fixture.Result -Raw | ConvertFrom-Json
         Assert-True ($data.EMAIL_TRANSPORT -eq 'gmail' -and $data.PORT -eq '8002') 'Perfil incorrecto'
-        Assert-True ($data.MODEL_MODE -eq 'vertex' -and $data.EMAIL_SENDER -eq 'student@example.com') 'Valores incorrectos'
+        Assert-True ($data.MODEL_MODE -eq 'vertex' -and $data.EMAIL_SENDER -eq 'sender@example.com') 'Valores incorrectos'
         Assert-True ($data.GMAIL_CREDENTIALS_FILE -eq (Join-Path $fixture.Private 'authorized-user.json')) 'Path incorrecto'
         Assert-True ($data.GMAIL_LEDGER_PATH -eq [IO.Path]::GetFullPath((Join-Path $fixture.Root '../../work/gmail-dispatch.sqlite'))) 'Ledger incorrecto'
     } finally {
         $env:LOCAL_TEST_RESULT = $oldResult
         $env:APPROVAL_SIGNING_KEY = $oldKey
     }
+}
+
+Run-Case 'Turismo inicia sin grant ni clave Gmail con claves de sus pares' {
+    $fixture = New-StartupFixture
+    $global:LocalTestOccupied = $false
+    $module = Join-Path $fixture.Root 'tourism_agent'
+    [void](New-Item -ItemType Directory -Path $module -Force)
+    [IO.File]::WriteAllText((Join-Path $module '__init__.py'), '')
+    $probe = @'
+import os
+assert not os.getenv('GMAIL_CREDENTIALS_FILE')
+assert not os.getenv('APPROVAL_SIGNING_KEY')
+assert os.environ['PORT'] == '8001'
+assert os.environ['AGENT_API_KEY_FILE'].endswith('tourism-api-key.txt')
+assert os.environ['EMAIL_AGENT_API_KEY_FILE'].endswith('email-api-key.txt')
+assert os.environ['AGENDA_AGENT_API_KEY_FILE'].endswith('agenda-api-key.txt')
+assert os.environ['WORKFLOW_DB_PATH'].endswith('tourism.sqlite')
+'@
+    [IO.File]::WriteAllText((Join-Path $module '__main__.py'), $probe)
+    Remove-Item -LiteralPath (Join-Path $fixture.Private 'authorized-user.json')
+    & $fixture.Script -PythonPath $PythonPath -Agent tourism
 }
 
 Run-Case 'Puerto ocupado no mata ni lanza procesos' {

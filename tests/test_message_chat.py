@@ -4,11 +4,14 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
+from semantic_fixtures import conversation
+from test_email_chat_graph import SemanticModel
 
 from common.config import Settings
 from email_agent.app import create_app as email_app
 from email_agent.gmail_auth import SCOPES, SENDER
 from tests.test_email_intent import integrated
+from tourism_agent.conversation import NativeConversation
 
 
 @pytest.fixture(autouse=True)
@@ -48,8 +51,10 @@ async def gmail_chat(tmp_path):
         approval_secret="p" * 32,
         gmail_credentials_file=str(credentials),
         gmail_ledger_path=str(tmp_path / "intentos.sqlite"),
+        workflow_db_path=str(tmp_path / "workflow.sqlite"),
     )
     app = email_app(settings)
+    app.state.service.model = SemanticModel("send")
     requests, posts = [], []
 
     def google(request):
@@ -82,8 +87,18 @@ async def gmail_chat(tmp_path):
         yield client, app, requests, posts
 
 
+def resume(result, message):
+    return {
+        "message": message,
+        "request_id": result["request_id"],
+        "session_id": result["session_id"],
+        "plan_version": result["plan_version"],
+    }
+
+
 async def test_email_message_only_then_natural_confirmation_dispatches_once(tmp_path):
     async with gmail_chat(tmp_path) as (client, app, requests, posts):
+        app.state.service.model = SemanticModel("draft")
         draft = (
             await client.post(
                 "/api/chat",
@@ -93,42 +108,33 @@ async def test_email_message_only_then_natural_confirmation_dispatches_once(tmp_
                 },
             )
         ).json()
-        assert draft["status"] == "preview" and draft["context"]
-        assert draft["conversation_state"] == "awaiting_confirmation"
-        assert not requests
-        confirmation = {"message": "Sí, envíalo", "context": draft["context"]}
-        sent = (await client.post("/api/chat", json=confirmation)).json()
-        assert sent["status"] == "sent" and sent["delivery"] == "provider_accepted"
-        assert sent["conversation_state"] == "sent" and len(posts) == 1
-        replay = (await client.post("/api/chat", json=confirmation)).json()
-        assert replay["delivery"] == "provider_accepted" and len(posts) == 1
+        assert draft["draft"] and draft["conversation_state"] == "draft" and not requests
+        app.state.service.model = SemanticModel("send", reuse_draft=True)
+        sent = (
+            await client.post("/api/chat", json=resume(draft, "Hazle llegar ese correo"))
+        ).json()
+        assert (
+            sent["status"] == "sent" and sent["delivery"] == "provider_accepted" and len(posts) == 1
+        )
+        replay = (
+            await client.post("/api/chat", json=resume(sent, "Hazle llegar ese correo"))
+        ).json()
+        assert replay == sent and len(posts) == 1
 
 
-async def test_email_asks_one_missing_field_and_preserves_general_message():
+async def test_email_writing_needs_no_address_or_approval():
     app = email_app(Settings.offline())
+    app.state.service.model = SemanticModel("draft")
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://local"
     ) as client:
-        first = (await client.post("/api/chat", json={"message": "Redacta un correo"})).json()
-        assert first["status"] == "clarification" and "destinatario" in first["message"]
-        second = (
+        reply = (
             await client.post(
-                "/api/chat", json={"message": "persona@example.com", "context": first["context"]}
+                "/api/chat", json={"message": "Redacta un recordatorio para el equipo."}
             )
         ).json()
-        assert second["status"] == "clarification" and "comunicar" in second["message"]
-        third = (
-            await client.post(
-                "/api/chat",
-                json={
-                    "message": "Recordatorio de la reunión de trabajo.",
-                    "context": second["context"],
-                },
-            )
-        ).json()
-        assert third["status"] == "preview"
-        assert third["preview"]["recipient"] == "persona@example.com"
-        assert third["preview"]["text"] == "Recordatorio de la reunión de trabajo."
+        assert reply["status"] == "completed" and reply["draft"]
+        assert reply["preview"] is reply["approval_token"] is None
 
 
 @pytest.mark.parametrize(
@@ -138,9 +144,10 @@ async def test_invalid_conversation_context_never_reaches_google(tmp_path, case)
     async with gmail_chat(tmp_path) as (client, app, requests, posts):
         draft = (
             await client.post(
-                "/api/chat",
+                "/api/email",
                 json={
-                    "message": "Redacta para persona@example.com un recordatorio de reunión.",
+                    "recipient": "persona@example.com",
+                    "request": "Recordatorio de reunión",
                     "session_id": "sesion-correcta",
                 },
             )
@@ -155,83 +162,74 @@ async def test_invalid_conversation_context_never_reaches_google(tmp_path, case)
         elif case == "changed_preview":
             encoded, signature = draft["context"].split(".")
             claims = json.loads(base64.urlsafe_b64decode(encoded))
-            claims["state"]["preview"]["text"] = "Contenido no aprobado"
+            claims["state"]["preview"]["text"] = "Contenido no autorizado"
             encoded = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode()
             confirmation["context"] = encoded + "." + signature
         else:
             app.state.service.fingerprint = "configuracion-cambiada"
         rejected = (await client.post("/api/chat", json=confirmation)).json()
-        assert rejected["status"] == "error" and rejected["delivery"] == "not_attempted"
+        assert rejected["status"] == "error" and rejected["delivery"] in {None, "not_attempted"}
         assert not requests and not posts
 
 
 @pytest.mark.parametrize(
-    "message",
+    "message,intent",
     [
-        "Sí, pero cambia el destinatario a otra@example.com",
-        "Envíalo, pero modifica el texto",
-        "No lo envíes",
-        'La frase es "sí, envíalo"',
+        ("Sí, pero cambia el destinatario a otra@example.com", "draft"),
+        ("Envíalo, pero modifica el texto", "draft"),
+        ("No lo envíes", "cancel"),
+        ('La frase es "sí, envíalo"', "chat"),
     ],
 )
-async def test_corrections_negation_and_quoted_confirmation_do_not_send(tmp_path, message):
+async def test_programmed_corrections_cancellation_and_chat_do_not_send(tmp_path, message, intent):
     async with gmail_chat(tmp_path) as (client, app, requests, posts):
         draft = (
             await client.post(
-                "/api/chat",
-                json={"message": "Redacta para persona@example.com un recordatorio de reunión."},
+                "/api/email", json={"recipient": "persona@example.com", "request": "Recordatorio"}
             )
         ).json()
+        app.state.service.model = SemanticModel(intent)
         result = (
             await client.post("/api/chat", json={"message": message, "context": draft["context"]})
         ).json()
         assert result["status"] != "sent" and not requests and not posts
 
 
-async def test_recipient_correction_requires_new_preview_confirmation(tmp_path):
+async def test_recipient_correction_composes_new_content_without_extra_approval(tmp_path):
     async with gmail_chat(tmp_path) as (client, app, requests, posts):
         draft = (
             await client.post(
-                "/api/chat",
-                json={"message": "Redacta para persona@example.com un recordatorio de reunión."},
+                "/api/email", json={"recipient": "persona@example.com", "request": "Recordatorio"}
             )
         ).json()
+        app.state.service.model = SemanticModel("draft")
         changed = (
             await client.post(
                 "/api/chat",
                 json={
-                    "message": "Sí, pero cambia el destinatario a otra@example.com",
+                    "message": "Redacta otro correo para otra@example.com",
                     "context": draft["context"],
                 },
             )
         ).json()
-        assert changed["status"] == "preview" and changed["context"] != draft["context"]
-        assert changed["preview"]["recipient"] == "otra@example.com" and not requests
+        assert changed["draft"] and not requests
+        app.state.service.model = SemanticModel("send", reuse_draft=True)
         sent = (
-            await client.post(
-                "/api/chat", json={"message": "Sí, envíalo", "context": changed["context"]}
-            )
+            await client.post("/api/chat", json=resume(changed, "Envíalo a otra@example.com"))
         ).json()
         assert sent["status"] == "sent" and len(posts) == 1
+        assert sent["preview"]["recipient"] == "otra@example.com"
+        assert sent["preview"]["text"] == changed["draft"]["text"]
 
 
-async def test_first_negative_message_never_calls_model_or_google(tmp_path):
+async def test_negative_current_message_is_interpreted_by_model_without_google(tmp_path):
     async with gmail_chat(tmp_path) as (client, app, requests, posts):
-
-        class ForbiddenModel:
-            async def invoke(self, payload):
-                raise AssertionError("Una negación no debe consultar el modelo.")
-
-        app.state.service.model = ForbiddenModel()
+        model = SemanticModel("cancel")
+        app.state.service.model = model
         result = (
-            await client.post(
-                "/api/chat",
-                json={
-                    "message": "No envíes un correo a persona@example.com "
-                    "con recordatorio de reunión."
-                },
-            )
+            await client.post("/api/chat", json={"message": "Dejemos esta gestión sin realizar"})
         ).json()
+        assert result["status"] == "cancelled" and len(model.calls) == 1
         assert result["delivery"] == "not_attempted" and not requests
 
 
@@ -241,18 +239,20 @@ async def test_tourism_confirmation_delegates_send_without_new_planning():
             await client.post(
                 "/api/chat",
                 json={
-                    "message": "Bogotá, 2 días, cultura; prepáralo por correo "
-                    "para persona@example.com"
+                    "message": "Bogotá, 2 días, cultura; prepara un correo para persona@example.com"
                 },
             )
         ).json()
-        assert draft["context"].get("email_context") and not sends
+        assert draft["email"]["draft"] and not sends
         old_calls = tourism.state.service.catalog.calls
+        tourism.state.service.conversation = NativeConversation(
+            tourism.state.service, conversation("consultar_correo")
+        )
+        email.state.service.model = SemanticModel("send", reuse_draft=True)
         result = (
             await client.post(
-                "/api/chat", json={"message": "Sí, envíalo", "context": draft["context"]}
+                "/api/chat", json=resume(draft, "Hazle llegar ese correo a persona@example.com")
             )
         ).json()
         assert result["email"]["status"] == "simulated" and len(sends) == 1
-        assert tourism.state.service.catalog.calls == old_calls
-        assert len(spy.requests) == 4
+        assert tourism.state.service.catalog.calls == old_calls and len(spy.requests) == 4

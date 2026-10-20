@@ -11,12 +11,15 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  RELEASE_GCP_PROJECT: ${{ vars.RELEASE_GCP_PROJECT }}
+  GMAIL_EXPECTED_EMAIL: ${{ vars.GMAIL_EXPECTED_EMAIL }}
   EXPECTED_GITHUB_REPOSITORY: ${{ vars.EXPECTED_GITHUB_REPOSITORY }}
   GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
   GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
 jobs:
   validate:
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.PUBLIC_SOURCE_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Obtener el código
@@ -33,6 +36,7 @@ jobs:
       contents: read
 
   revisions:
+    if: ${{ github.event_name == 'workflow_dispatch' && vars.PUBLIC_SOURCE_DEPLOY_ENABLED == 'true' }}
     needs: [validate, checks]
     runs-on: ubuntu-latest
     environment: cloudrun-two-agents
@@ -50,7 +54,7 @@ jobs:
       - name: Autenticar mediante WIF sin claves persistidas
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          project_id: example-project
+          project_id: ${{ vars.RELEASE_GCP_PROJECT }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
           create_credentials_file: true

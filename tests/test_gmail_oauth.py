@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from email_agent.gmail_auth import SCOPES, SENDER, OAuthError
+from scripts import authorize_gmail
 from scripts.authorize_gmail import OAuthFlow, load_client, save_credentials
 
 CONFIG = {
@@ -19,7 +20,7 @@ CONFIG = {
 def test_oauth_url_uses_loopback_state_nonce_pkce_and_narrow_scopes():
     flow = OAuthFlow(CONFIG, "http://127.0.0.1:12345/callback")
     query = parse_qs(urlsplit(flow.authorization_url()).query)
-    assert query["login_hint"] == ["student@example.com"]
+    assert query["login_hint"] == ["sender@example.com"]
     assert set(query["scope"][0].split()) == SCOPES
     assert query["state"] == [flow.state] and len(flow.state) >= 32
     assert query["nonce"] == [flow.nonce] and len(flow.nonce) >= 32
@@ -55,9 +56,58 @@ def test_oauth_callback_is_one_shot_and_deadline_bounded():
     with pytest.raises(OAuthError):
         flow.callback("state=" + flow.state + "&code=SECRET_CODE")
     expired = OAuthFlow(CONFIG, "http://127.0.0.1:12345/callback", clock=lambda: now[0])
-    now[0] += 301
+    now[0] += 1801
     with pytest.raises(OAuthError, match="flow_expired"):
         expired.callback("state=" + expired.state + "&code=SECRET_CODE")
+
+
+@pytest.mark.parametrize("elapsed", [301, 1799])
+def test_oauth_callback_accepts_slow_human_consent_within_thirty_minutes(elapsed):
+    now = [100]
+    flow = OAuthFlow(CONFIG, "http://127.0.0.1:12345/callback", clock=lambda: now[0])
+    now[0] += elapsed
+    assert flow.callback("state=" + flow.state + "&code=SECRET_CODE") == "SECRET_CODE"
+
+
+@pytest.mark.parametrize(
+    "path,host", [("/unrelated", "127.0.0.1:12345"), ("/callback", "wrong.invalid")]
+)
+def test_invalid_loopback_requests_do_not_extend_consent_deadline(monkeypatch, path, host):
+    now = [100]
+    elapsed = iter([899, 1799, 1801])
+    errors = []
+    servers = []
+
+    class FakeServer:
+        def __init__(self, address, handler):
+            self.handler = handler
+            self.server_port = 12345
+            servers.append(self)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def handle_request(self):
+            now[0] = 100 + next(elapsed)
+            request = object.__new__(self.handler)
+            request.path = path
+            request.headers = {"Host": host}
+            request.send_error = errors.append
+            request.do_GET()
+
+    monkeypatch.setattr(authorize_gmail, "HTTPServer", FakeServer)
+    monkeypatch.setattr(
+        authorize_gmail,
+        "OAuthFlow",
+        lambda config, redirect: OAuthFlow(config, redirect, clock=lambda: now[0]),
+    )
+    with pytest.raises(OAuthError, match="tiempo máximo"):
+        authorize_gmail.receive_callback(CONFIG, browser=lambda url: True)
+    assert errors == [400, 400, 400]
+    assert len(servers) == 1
 
 
 @pytest.mark.parametrize(
@@ -83,6 +133,27 @@ def test_oauth_verified_claims_must_match_flow_and_selected_account(field, value
     claims[field] = value
     with pytest.raises(OAuthError):
         flow.accept_claims(claims, {"email": SENDER, "email_verified": True, "sub": "selected-sub"})
+
+
+@pytest.mark.parametrize(
+    "account", ["sender@example.com", "student@example.com", "learner@example.com"]
+)
+def test_oauth_accepts_only_exact_class_account_in_claims_and_userinfo(account):
+    flow = OAuthFlow(CONFIG, "http://127.0.0.1:12345/callback")
+    claims = {
+        "nonce": flow.nonce,
+        "aud": CONFIG["client_id"],
+        "iss": "https://accounts.google.com",
+        "sub": "selected-sub",
+        "email": account,
+        "email_verified": True,
+    }
+    userinfo = {"email": account, "email_verified": True, "sub": "selected-sub"}
+    if account == "sender@example.com":
+        assert flow.accept_claims(claims, userinfo) == "selected-sub"
+    else:
+        with pytest.raises(OAuthError, match="gmail_identity_mismatch"):
+            flow.accept_claims(claims, userinfo)
 
 
 def test_secure_output_contains_only_refresh_credentials_and_never_overwrites(tmp_path, capsys):

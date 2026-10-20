@@ -1,3 +1,5 @@
+# Offline defaults; no host ADC, Gmail or Calendar grants are mounted.
+# Live configuration requires a separately reviewed private override.
 services:
   tourism:
     build:
@@ -5,31 +7,61 @@ services:
       dockerfile: tourism_agent/Dockerfile
     ports: ["127.0.0.1:8001:8080"]
     environment:
+      AGENT_API_KEY: ${TOURISM_API_KEY:-}
+      EMAIL_AGENT_API_KEY: ${EMAIL_API_KEY:-}
+      AGENDA_AGENT_API_KEY: ${AGENDA_API_KEY:-}
+      WORKFLOW_DB_PATH: /state/tourism.sqlite
       PUBLIC_AGENT_URL: http://127.0.0.1:8001
       EMAIL_AGENT_URL: http://email:8080
-      MODEL_MODE: vertex
-      VERTEX_PROJECT_ID: example-project
+      AGENDA_AGENT_URL: http://agenda:8080
+      MODEL_MODE: ${MODEL_MODE:-fixture}
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-YOUR_VERTEX_PROJECT_ID}
       VERTEX_LOCATION: global
       MODEL_ID: gemini-3.1-flash-lite
       ENABLE_MCP: "false"
+    volumes:
+      - tourism-state:/state
   email:
     build:
       context: .
       dockerfile: email_agent/Dockerfile
     ports: ["127.0.0.1:8002:8080"]
     environment:
+      AGENT_API_KEY: ${EMAIL_API_KEY:-}
+      WORKFLOW_DB_PATH: /state/email.sqlite
       PUBLIC_AGENT_URL: http://email:8080
-      MODEL_MODE: vertex
-      VERTEX_PROJECT_ID: example-project
+      MODEL_MODE: ${MODEL_MODE:-fixture}
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-YOUR_VERTEX_PROJECT_ID}
       VERTEX_LOCATION: global
       MODEL_ID: gemini-3.1-flash-lite
-      EMAIL_TRANSPORT: gmail
-      EMAIL_SENDER: learner@example.com
-      GMAIL_CREDENTIALS_FILE: /secrets/gmail/authorized-user.json
+      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-mock}
+      EMAIL_SENDER: ${EMAIL_SENDER:-classroom@example.invalid}
       GMAIL_LEDGER: sqlite
       GMAIL_LEDGER_PATH: /state/gmail-dispatch.sqlite
       APPROVAL_SIGNING_KEY: ${APPROVAL_SIGNING_KEY:-}
-      ENABLE_REAL_EMAIL: "true"
+      ENABLE_REAL_EMAIL: ${ENABLE_REAL_EMAIL:-false}
     volumes:
-      - ${GMAIL_CREDENTIALS_FILE:-../../work/gmail-authorized-user.json}:/secrets/gmail/authorized-user.json:ro
-      - ../../work/gmail-runtime:/state
+      - email-state:/state
+  agenda:
+    build:
+      context: .
+      dockerfile: agenda_agent/Dockerfile
+    ports: ["127.0.0.1:8003:8080"]
+    environment:
+      AGENT_API_KEY: ${AGENDA_API_KEY:-}
+      EMAIL_AGENT_API_KEY: ${EMAIL_API_KEY:-}
+      WORKFLOW_DB_PATH: /state/agenda.sqlite
+      PUBLIC_AGENT_URL: http://agenda:8080
+      EMAIL_AGENT_URL: http://email:8080
+      MODEL_MODE: ${MODEL_MODE:-fixture}
+      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID:-YOUR_VERTEX_PROJECT_ID}
+      VERTEX_LOCATION: global
+      MODEL_ID: gemini-3.1-flash-lite
+      CALENDAR_LEDGER_PATH: /state/calendar-dispatch.sqlite
+      AGENDA_APPROVAL_SIGNING_KEY: ${AGENDA_APPROVAL_SIGNING_KEY:-}
+    volumes:
+      - agenda-state:/state
+volumes:
+  tourism-state:
+  email-state:
+  agenda-state:
