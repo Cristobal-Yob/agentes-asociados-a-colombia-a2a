@@ -1,6 +1,7 @@
 # Optional Agenda and your own Calendar authorization
 
-Agenda is a third independent FastAPI/LangGraph service. It is optional for learning
+Agenda is a third independent FastAPI service with an async Python workflow, not
+LangGraph. It is optional for learning
 Itinerary and Email. Default/offline execution does not access Calendar or create
 events. Calendar live authorization and acceptance are not implied by this source.
 

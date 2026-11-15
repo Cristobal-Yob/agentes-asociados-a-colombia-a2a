@@ -14,7 +14,7 @@ flowchart LR
   T -->|A2A typed JSON| E
   T --> C[Curated catalog]
   C -->|Optional MCP| M[Read-only catalog tools]
-  T -. Optional A2A .-> A[Agenda FastAPI / LangGraph]
+  T -. Optional A2A .-> A[Agenda FastAPI / async service]
   A -. Requested summary .-> E
   E -->|Explicit send only| P[Gmail or selected provider]
   A -. Explicit confirmation .-> G[Google Calendar]
