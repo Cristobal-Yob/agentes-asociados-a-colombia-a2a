@@ -1,0 +1,6 @@
+agenda_agent/** -text
+common/** -text
+email_agent/** -text
+tourism_agent/** -text
+pyproject.toml -text
+uv.lock -text

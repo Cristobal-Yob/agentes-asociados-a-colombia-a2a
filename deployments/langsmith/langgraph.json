@@ -1,0 +1,11 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "python_version": "3.12",
+  "source": {
+    "kind": "uv"
+  },
+  "graphs": {
+    "tourism": "./colombia_preview.py:tourism",
+    "email": "./colombia_preview.py:email"
+  }
+}

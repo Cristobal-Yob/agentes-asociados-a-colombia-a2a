@@ -1,0 +1,49 @@
+{
+  "email": {
+    "image_sha256": "927bdb275956cf0cef268d96318decea35eb57855bdf2e66a890216edb7fa4be",
+    "revision": "colombia-email-00006-xt7",
+    "source_archive_files": 28,
+    "source_archive_sha256": "23d995fbe80f790f99f5002b6037851fbc58505b9dc9cb0862a860cffe046292"
+  },
+  "runtime": {
+    "agenda_agent/__init__.py": "269ddfa0297b46363499e8ddcb30d5bd41d4917a06f851ab30bc77db784a2e30",
+    "agenda_agent/contracts.py": "491bd11b217a54af17d4b84fe7a50246faccc557b0d2ec99dcb1282d735d7ee5",
+    "common/__init__.py": "8f79f55df9032673c2755bde74ae41c09e453c2ddf8fc2ef5f4fc351a83ae911",
+    "common/a2a_transport.py": "7cd49735ddeb6cabfa805d7367570fa9f97e5340cc3a969f3516f56b3c6d4650",
+    "common/auth.py": "60398f9f8772477d72da16538e4bbc2b62192713bfe09c99b8b43912271a8140",
+    "common/config.py": "f3af37f088f0d2f72c1b97721baf53bae2d5e2da72e610c5a9a9e9eaefd1e3c1",
+    "common/contracts.py": "7beb2446287c3ef0c1603b2e38ea80aaebd3cf581731a49e52802b20317232e3",
+    "common/conversation.py": "987361bbee28b489a6ae69876e0e4ea4e4e0d68d4fe67726f2c1688686e17265",
+    "common/correlation.py": "a79f369d1123bcf4023722300d4047c1b0f5525c13f60ae758dc9a1b739e9c0b",
+    "common/entry.py": "a59e1bee8c0e377df8dc8d707b415ba36cfb1a26082dee9428919af228e0ead3",
+    "common/firestore_workflows.py": "0476a6563f859cd27172a24ed01b2a5aed9d2522c7642bf34acfa03c23d9bd89",
+    "common/model.py": "e94a6aeb06f961c3a1c6ee8db9c4de238735ffe6c9d717e2fc6221a6df76903e",
+    "common/private.py": "d20ae593a31a93964a1f20cbc4a17d60c87d6a50b3fb1dc47ea798bd2edb52d4",
+    "common/runtime.py": "454ca093900bbee27507c6b7c11421d952fad4661f885b6821d27c6677d7c99d",
+    "common/workflows.py": "a22f73f3cc3ff25112b7f97b11d718b5f3944b1840f724545539f218ef77120a",
+    "email_agent/__init__.py": "23017ffddcc84b35713b139d58aa5c82a34490d37a83c653a70b275fc0ce9408",
+    "email_agent/__main__.py": "c568abb171d4d9f9c6965af349c012f0709a9441a90fd5cbf60dda2b6babdda8",
+    "email_agent/app.py": "2badef0df8a621a62cbefb9b96ae00ba2eca65d606055ac006780b1fc6dc491e",
+    "email_agent/approval.py": "596b39ce01c444f4c0d02fe3a69f2cca15557be3f39ff3861b42093634232cb9",
+    "email_agent/dispatch_ledger.py": "6e455c11954df52bd8e58c5e3aded44aead6f796acaadc6d5ec527fa41a11c83",
+    "email_agent/gmail_auth.py": "99db0c3ca808f202e52919578a1b955eaa3771e6401cdcf57ace63b5577e6680",
+    "email_agent/gmail_transport.py": "709a4ab69155acdacb548548fd6a6024a5022002d28d7f708e17c8533466446b",
+    "email_agent/service.py": "01db58187715a0f7269d7e3b3b5e5affac4c6df1f4c1d42921cb2561ae8cf18e",
+    "email_agent/transport.py": "9dcdae131fdf6531dacb55717d00d42b435e6cd57e078805bcfd7378b6502f6e",
+    "pyproject.toml": "8e27adc2e0a940e1295d24d29c9e172f0a4b20b54ba73706036174f7491fc4c1",
+    "tourism_agent/__init__.py": "dbce2653ef3fc431112b04cf03dbb02d7e75967f26c431d3b67635d48f7a8550",
+    "tourism_agent/__main__.py": "45b685f4801d1005fa97076d27e117bbd760da2ec5a98231a366aace89cd61e8",
+    "tourism_agent/app.py": "9e04642183c3bbb81a7c516556811a8572e69293d6914eab75d1e793531f11bb",
+    "tourism_agent/catalog.py": "8513e859feac00c229296d68077cadd2e159161fd76aa39227e6ad0d4f21eaee",
+    "tourism_agent/conversation.py": "74ee0d27f4ffbd824dfe9f7ec6303ace58296aec53355ec257a2239f789f5c8c",
+    "tourism_agent/mcp_catalog.py": "1c0c7f3f094117fedaa78e8420ff867b7db43e8fb827a39e41fa036b34f4885e",
+    "tourism_agent/service.py": "6196588f39d2b63e86b1784a2d6ccebd89742350b679e50a1961e684c56dd594",
+    "uv.lock": "ac0105c8eed93f908db1cf2847184c439daaff1a3ee1e2d1bb3ac066122c6adb"
+  },
+  "tourism": {
+    "image_sha256": "e6b818e09169a21194159e03ff1838cceb1e457426fa0e1ad2364837f1b8297f",
+    "revision": "colombia-itinerary-00002-pwz",
+    "source_archive_files": 37,
+    "source_archive_sha256": "aefd2765e7554ee3261e2c36befc319710ef5e300aa168e1793c14812e617bae"
+  }
+}
